@@ -1,10 +1,11 @@
 """
-Input handler for GPIO and serial morse code input
-Handles signal timing and pulse detection
+Input handler for GPIO, serial, and Bluetooth morse code input
+Handles signal timing and pulse detection from Arduino Nano via Bluetooth
 """
 
 import time
 import logging
+import threading
 from config import (
     GPIO_PIN,
     GPIO_MODE,
@@ -14,7 +15,9 @@ from config import (
     WORD_GAP,
     INPUT_METHOD,
     SERIAL_PORT,
-    SERIAL_BAUDRATE
+    SERIAL_BAUDRATE,
+    BLUETOOTH_PORT,
+    BLUETOOTH_BAUDRATE,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,13 +29,12 @@ except ImportError:
     RASPBERRY_PI = False
     logger.warning("RPi.GPIO not available. GPIO input will not work.")
 
-if INPUT_METHOD == "SERIAL":
-    try:
-        import serial
-        SERIAL_AVAILABLE = True
-    except ImportError:
-        SERIAL_AVAILABLE = False
-        logger.warning("pyserial not available. Serial input will not work.")
+try:
+    import serial
+    SERIAL_AVAILABLE = True
+except ImportError:
+    SERIAL_AVAILABLE = False
+    logger.warning("pyserial not available. Serial and Bluetooth input will not work.")
 
 
 class GPIOInputHandler:
@@ -115,6 +117,126 @@ class SerialInputHandler:
             logger.info("Serial port closed")
 
 
+class BluetoothInputHandler:
+    """
+    Handles morse code input from Arduino Nano via Bluetooth (HC-05/HC-06 module).
+
+    The Arduino Nano transmits morse signals as ASCII characters over the Bluetooth
+    serial link:
+      '.'  -> dot signal
+      '-'  -> dash signal
+      ' '  -> character gap (space between characters within a word)
+      '/'  -> word gap (separator between words)
+      newline -> end of message
+
+    A background thread continuously reads from the Bluetooth serial port and
+    dispatches decoded signal events to registered callbacks.
+    """
+    
+    def __init__(self, port=BLUETOOTH_PORT, baudrate=BLUETOOTH_BAUDRATE):
+        if not SERIAL_AVAILABLE:
+            raise RuntimeError("pyserial is required for Bluetooth input")
+        
+        self.port = port
+        self.baudrate = baudrate
+        self.serial = None
+        self.running = False
+        self.callbacks = []
+        self._thread = None
+        
+        try:
+            self.serial = serial.Serial(port, baudrate, timeout=1)
+            logger.info(f"Bluetooth input handler initialized on {port} at {baudrate} baud")
+        except serial.SerialException as e:
+            logger.error(f"Failed to open Bluetooth port {port}: {e}")
+            raise
+    
+    def register_callback(self, callback):
+        """Register a callback function for detected signals"""
+        self.callbacks.append(callback)
+    
+    def _trigger_callback(self, signal_type, duration=0):
+        """Dispatch a signal event to all registered callbacks"""
+        for callback in self.callbacks:
+            try:
+                callback(signal_type, duration)
+            except Exception as e:
+                logger.error(f"Error in Bluetooth callback: {e}")
+    
+    def _read_loop(self):
+        """Background thread: read bytes from Bluetooth and emit signal events"""
+        logger.info("Bluetooth read loop started")
+        while self.running:
+            try:
+                byte = self.serial.read(1)
+                if not byte:
+                    continue
+                
+                char = byte.decode("ascii", errors="ignore")
+                
+                if char == ".":
+                    self._trigger_callback("DOT", DOT_DURATION)
+                elif char == "-":
+                    self._trigger_callback("DASH", DASH_DURATION)
+                elif char == " ":
+                    self._trigger_callback("CHARACTER_GAP", CHARACTER_GAP)
+                elif char == "/":
+                    self._trigger_callback("WORD_GAP", WORD_GAP)
+                elif char == "\n":
+                    # End of message: first flush any pending word, then notify message end.
+                    # on_word_gap() is safe to call on empty state (no duplicate processing).
+                    self._trigger_callback("WORD_GAP", WORD_GAP)
+                    self._trigger_callback("MESSAGE_END", 0)
+                # Ignore carriage returns and other control characters
+                
+            except serial.SerialException as e:
+                logger.error(f"Bluetooth serial error: {e}")
+                break
+            except Exception as e:
+                logger.error(f"Unexpected error in Bluetooth read loop: {e}")
+        
+        logger.info("Bluetooth read loop stopped")
+    
+    def start(self):
+        """Start the background reading thread"""
+        if self.running:
+            return
+        self.running = True
+        self._thread = threading.Thread(target=self._read_loop, daemon=True)
+        self._thread.start()
+        logger.info("Bluetooth input handler started")
+    
+    def stop(self):
+        """Stop the background reading thread"""
+        self.running = False
+        if self._thread:
+            self._thread.join(timeout=2)
+        logger.info("Bluetooth input handler stopped")
+    
+    def send(self, data):
+        """
+        Send data back to the Arduino Nano via Bluetooth.
+
+        Args:
+            data (str): String to transmit over the Bluetooth serial link.
+        """
+        if self.serial and self.serial.is_open:
+            try:
+                self.serial.write((data + "\n").encode("ascii", errors="replace"))
+                logger.info(f"Sent via Bluetooth: {data[:60]}{'...' if len(data) > 60 else ''}")
+            except serial.SerialException as e:
+                logger.error(f"Failed to send via Bluetooth: {e}")
+        else:
+            logger.warning("Bluetooth serial port is not open; cannot send data")
+    
+    def cleanup(self):
+        """Stop the read thread and close the serial port"""
+        self.stop()
+        if self.serial and self.serial.is_open:
+            self.serial.close()
+            logger.info("Bluetooth serial port closed")
+
+
 class MorseInputProcessor:
     """Processes raw input signals and detects dots, dashes, and gaps"""
     
@@ -177,11 +299,12 @@ class MorseInputProcessor:
 
 
 def create_input_handler(method=INPUT_METHOD):
-    """Factory function to create appropriate input handler"""
-    
+    """
+    Factory function to create appropriate input handler.
+
     Args:
-        method (str): "GPIO" or "SERIAL"
-    
+        method (str): "GPIO", "SERIAL", or "BLUETOOTH"
+
     Returns:
         Input handler instance
     """
@@ -189,5 +312,7 @@ def create_input_handler(method=INPUT_METHOD):
         return GPIOInputHandler()
     elif method.upper() == "SERIAL":
         return SerialInputHandler()
+    elif method.upper() == "BLUETOOTH":
+        return BluetoothInputHandler()
     else:
         raise ValueError(f"Unknown input method: {method}")

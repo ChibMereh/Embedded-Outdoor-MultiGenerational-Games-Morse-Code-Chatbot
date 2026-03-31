@@ -34,7 +34,18 @@ class WordValidator:
             "COMMUNICATION", "MESSAGE", "PYTHON", "RASPBERRY", "PI",
             "GAME", "PLAY", "OUTDOOR", "MULTI", "GENERATIONAL",
             "YES", "NO", "STOP", "START", "HELP", "SOS",
-            "CHATBOT", "DECODE", "ENCODE", "TRANSMIT", "RECEIVE"
+            "CHATBOT", "DECODE", "ENCODE", "TRANSMIT", "RECEIVE",
+            "ARDUINO", "NANO", "BLUETOOTH", "OPENAI", "RESPONSE",
+            "SEND", "READ", "WRITE", "INPUT", "OUTPUT",
+            "THE", "AND", "FOR", "ARE", "BUT", "NOT", "YOU", "ALL",
+            "CAN", "HER", "WAS", "ONE", "OUR", "OUT", "DAY",
+            "HI", "OK", "GO", "DO", "ME", "IT", "IS", "IN", "ON",
+            "GOOD", "MORNING", "AFTERNOON", "EVENING", "NIGHT",
+            "HOW", "WHAT", "WHERE", "WHEN", "WHO", "WHY",
+            "TIME", "BACK", "COME", "BEEN", "CALL", "FIRST",
+            "OVER", "SUCH", "WELL", "ALSO", "THEN", "THAN",
+            "INTO", "SOME", "COULD", "THEM", "OTHER", "THESE",
+            "THEIR", "THERE", "ABOUT", "WOULD", "WHICH",
         ]
         return set(words)
     

@@ -117,6 +117,34 @@ class MorseDecoder:
         self.decoded_character = None
         self.decoded_word = None
     
+    def text_to_morse(self, text):
+        """
+        Convert plain text to a morse code string.
+        Characters are separated by a single space; words are separated by ' / '.
+
+        Args:
+            text (str): Plain text to encode (e.g., "HELLO WORLD")
+
+        Returns:
+            str: Morse code string (e.g., ".... . .-.. .-.. --- / .-- --- .-. .-.. -..")
+        """
+        text_upper = text.upper()
+        words = text_upper.split()
+        encoded_words = []
+
+        for word in words:
+            encoded_chars = []
+            for char in word:
+                morse = REVERSE_MORSE_DICT.get(char)
+                if morse:
+                    encoded_chars.append(morse)
+                else:
+                    logger.warning(f"No morse encoding for character: {char}")
+            if encoded_chars:
+                encoded_words.append(" ".join(encoded_chars))
+
+        return " / ".join(encoded_words)
+
     def morse_to_text(self, morse_string):
         """
         Convert a complete morse string to text
