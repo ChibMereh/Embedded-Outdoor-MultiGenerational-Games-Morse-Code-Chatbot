@@ -1,13 +1,27 @@
 """
 Main application loop for Morse code decoder
+Arduino Nano Bluetooth communication with OpenAI integration
 """
 
+import os
 import time
 import logging
 import sys
-from config import ENABLE_DISPLAY, ENABLE_LOGGING, LOG_FILE
+from config import (
+    ENABLE_DISPLAY,
+    ENABLE_LOGGING,
+    LOG_FILE,
+    INPUT_METHOD,
+    OPENAI_API_KEY,
+    OPENAI_MODEL,
+    OPENAI_MAX_TOKENS,
+    OPENAI_TEMPERATURE,
+    ENABLE_BT_RESPONSE,
+    BT_RESPONSE_ENCODING,
+    AUTO_RESPONSE,
+)
 from morse_decoder import MorseDecoder
-from input_handler import MorseInputProcessor, create_input_handler, INPUT_METHOD
+from input_handler import MorseInputProcessor, create_input_handler, BluetoothInputHandler
 from word_validator import WordValidator
 
 # Configure logging
@@ -24,6 +38,19 @@ if ENABLE_LOGGING:
 
 logger = logging.getLogger(__name__)
 
+# OpenAI client setup
+try:
+    from openai import OpenAI
+    _api_key = OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY", "")
+    openai_client = OpenAI(api_key=_api_key) if _api_key else None
+    if openai_client:
+        logger.info("OpenAI client initialized")
+    else:
+        logger.warning("No OpenAI API key configured. AI responses will be disabled.")
+except ImportError:
+    openai_client = None
+    logger.warning("openai library not installed. AI responses will be disabled.")
+
 
 class MorseCodeChatbot:
     """Main application class for the Morse code decoder chatbot"""
@@ -35,6 +62,7 @@ class MorseCodeChatbot:
         self.input_handler = None
         self.last_character_time = None
         self.last_word_time = None
+        self.decoded_words = []  # Accumulate words for full message
         
         logger.info("Morse Code Chatbot initialized")
     
@@ -59,6 +87,9 @@ class MorseCodeChatbot:
         
         elif signal_type == "WORD_GAP":
             self.on_word_gap()
+        
+        elif signal_type == "MESSAGE_END":
+            self.on_message_end()
     
     def on_character_gap(self):
         """Handle gap between characters"""
@@ -97,6 +128,105 @@ class MorseCodeChatbot:
                     logger.info(f"Did you mean: {', '.join(suggestions)}")
                     if ENABLE_DISPLAY:
                         print(f"Did you mean: {', '.join(suggestions)}\n")
+            
+            self.decoded_words.append(word)
+    
+    def on_message_end(self):
+        """
+        Handle end of a complete message (newline from Arduino Nano).
+        Assembles all decoded words into a full message, sends it to OpenAI,
+        and optionally transmits the AI response back via Bluetooth.
+        """
+        if not self.decoded_words:
+            return
+        
+        full_message = " ".join(self.decoded_words)
+        self.decoded_words = []
+        
+        if ENABLE_DISPLAY:
+            print(f"\n{'='*60}")
+            print(f"RECEIVED MESSAGE: {full_message}")
+            print(f"{'='*60}")
+        
+        logger.info(f"Full message received: {full_message}")
+        
+        if AUTO_RESPONSE and openai_client:
+            ai_response = self.get_openai_response(full_message)
+            if ai_response:
+                self.send_bluetooth_response(ai_response)
+    
+    def get_openai_response(self, message):
+        """
+        Send a decoded message to OpenAI and return the AI response.
+
+        Args:
+            message (str): Decoded text message from Arduino Nano.
+
+        Returns:
+            str: AI response text, or None on error.
+        """
+        if not openai_client:
+            logger.warning("OpenAI client not available; skipping AI response")
+            return None
+        
+        try:
+            if ENABLE_DISPLAY:
+                print("Sending to OpenAI...", flush=True)
+            
+            chat_response = openai_client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a helpful assistant communicating via Morse code. "
+                            "Keep your responses concise and clear, as they will be "
+                            "transmitted back via Morse code to an Arduino Nano."
+                        ),
+                    },
+                    {"role": "user", "content": message},
+                ],
+                max_tokens=OPENAI_MAX_TOKENS,
+                temperature=OPENAI_TEMPERATURE,
+            )
+            
+            ai_response = chat_response.choices[0].message.content.strip()
+            
+            if ENABLE_DISPLAY:
+                print(f"AI Response: {ai_response}\n")
+            
+            logger.info(f"OpenAI response: {ai_response}")
+            return ai_response
+        
+        except Exception as e:
+            logger.error(f"OpenAI API error: {e}")
+            if ENABLE_DISPLAY:
+                print(f"OpenAI error: {e}\n")
+            return None
+    
+    def send_bluetooth_response(self, response_text):
+        """
+        Encode and send the AI response back to the Arduino Nano via Bluetooth.
+
+        Args:
+            response_text (str): Plain text AI response to send.
+        """
+        if not ENABLE_BT_RESPONSE:
+            return
+        
+        if not isinstance(self.input_handler, BluetoothInputHandler):
+            logger.warning("Input handler is not Bluetooth; cannot send response")
+            return
+        
+        if BT_RESPONSE_ENCODING.upper() == "MORSE":
+            encoded = self.decoder.text_to_morse(response_text)
+        else:
+            encoded = response_text
+        
+        if ENABLE_DISPLAY:
+            print(f"Sending response via Bluetooth ({BT_RESPONSE_ENCODING}): {encoded[:80]}{'...' if len(encoded) > 80 else ''}\n")
+        
+        self.input_handler.send(encoded)
     
     def setup_input(self):
         """Setup input handler based on configuration"""
@@ -105,8 +235,10 @@ class MorseCodeChatbot:
             
             if INPUT_METHOD.upper() == "GPIO":
                 self.input_handler.register_callback(self.processor.process_signal)
-            
-            self.processor.register_callback(self.on_signal_detected)
+                self.processor.register_callback(self.on_signal_detected)
+            else:
+                # BLUETOOTH and SERIAL handlers emit signal events directly
+                self.input_handler.register_callback(self.on_signal_detected)
             
             logger.info(f"Input handler ({INPUT_METHOD}) setup complete")
         except Exception as e:
@@ -121,14 +253,16 @@ class MorseCodeChatbot:
             if ENABLE_DISPLAY:
                 print("=" * 60)
                 print("Morse Code Decoder - Chatbot")
+                print(f"Input method: {INPUT_METHOD}")
+                print(f"OpenAI: {'enabled' if openai_client else 'disabled (no API key)'}")
+                print(f"Bluetooth response: {'enabled' if ENABLE_BT_RESPONSE else 'disabled'}")
                 print("=" * 60)
-                print("Waiting for morse code input...")
+                print("Waiting for morse code input from Arduino Nano...")
                 print("(Use Ctrl+C to exit)")
                 print("=" * 60)
             
             logger.info("Application started, waiting for input")
             
-            # For GPIO input, keep the program running
             if INPUT_METHOD.upper() == "GPIO":
                 try:
                     while True:
@@ -136,11 +270,13 @@ class MorseCodeChatbot:
                 except KeyboardInterrupt:
                     logger.info("Keyboard interrupt received")
             else:
-                # For serial or other inputs, implement as needed
-                if ENABLE_DISPLAY:
-                    self.input_handler.start()
+                # BLUETOOTH / SERIAL: start the background read thread
+                self.input_handler.start()
+                try:
                     while self.input_handler.running:
                         time.sleep(0.1)
+                except KeyboardInterrupt:
+                    logger.info("Keyboard interrupt received")
         
         except Exception as e:
             logger.error(f"Application error: {e}")

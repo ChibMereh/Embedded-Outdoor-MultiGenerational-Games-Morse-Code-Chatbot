@@ -1,0 +1,3 @@
+2026-03-31 10:22:36,642 - INFO - Decoded character: .... -> H
+2026-03-31 10:22:36,643 - WARNING - Dictionary file not found: english_words.txt
+2026-03-31 10:22:36,643 - WARNING - Using fallback dictionary
