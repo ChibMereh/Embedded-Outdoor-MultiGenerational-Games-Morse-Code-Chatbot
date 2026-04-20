@@ -159,30 +159,33 @@ char decodeMorse(const char *pattern) {
 // Redraw both LCD lines from current state.
 void updateLCD() {
   lcd.clear();
-  // Line 0: morse pattern being built; AI response when idle; BLE status otherwise
+  // Line 0 (top): word being composed — Morse pattern while entering,
+  //               word buffer when not entering, BLE status when idle
   if (morseLen > 0) {
     lcdPrint(0, morsePattern);
-  } else if (showingAIResponse && aiResponseLen > 0) {
-    // Scrolling handled in loop(); just show the current slice here on demand
-    if (aiResponseLen <= LCD_COLS) {
-      lcdPrint(0, aiResponse);
-    } else {
+  } else if (wordLen > 0) {
+    if (wordLen <= LCD_COLS) lcdPrint(0, wordBuffer);
+    else {
       char slice[LCD_COLS + 1];
-      strncpy(slice, aiResponse + aiScrollOffset, LCD_COLS);
+      strncpy(slice, wordBuffer + scrollOffset, LCD_COLS);
       slice[LCD_COLS] = '\0';
       lcdPrint(0, slice);
     }
   } else {
     lcdPrint(0, bleConnected ? "BLE Connected " : "BLE Searching.");
   }
-  // Line 1: word buffer (scrolling handled in loop)
-  if (wordLen == 0)             lcdPrint(1, "");
-  else if (wordLen <= LCD_COLS) lcdPrint(1, wordBuffer);
-  else {
-    char slice[LCD_COLS + 1];
-    strncpy(slice, wordBuffer + scrollOffset, LCD_COLS);
-    slice[LCD_COLS] = '\0';
-    lcdPrint(1, slice);
+  // Line 1 (bottom): AI response from the Raspberry Pi (scrolling handled in loop)
+  if (showingAIResponse && aiResponseLen > 0) {
+    if (aiResponseLen <= LCD_COLS) {
+      lcdPrint(1, aiResponse);
+    } else {
+      char slice[LCD_COLS + 1];
+      strncpy(slice, aiResponse + aiScrollOffset, LCD_COLS);
+      slice[LCD_COLS] = '\0';
+      lcdPrint(1, slice);
+    }
+  } else {
+    lcdPrint(1, "");
   }
 }
 
@@ -232,12 +235,12 @@ void sendWord() {
   if (wordLen == 0) { Serial.println(F("Nothing to send")); return; }
   Serial.print(F("Sending: ")); Serial.println(wordBuffer);
   statusChar.writeValue((uint8_t *)"SENDING", 7);
-  lcdPrint(0, "SENDING...");
-  lcdPrint(1, wordBuffer);
+  lcdPrint(0, wordBuffer);     // top: word being sent
+  lcdPrint(1, "SENDING...");   // bottom: status
   wordChar.writeValue((uint8_t *)wordBuffer, (unsigned int)wordLen);
   delay(200);
   statusChar.writeValue((uint8_t *)"SENT", 4);
-  lcdPrint(0, "SENT");
+  lcdPrint(1, "SENT          "); // bottom: status
   delay(1500);
   eraseAll();
   statusChar.writeValue((uint8_t *)"READY", 5);
@@ -361,14 +364,14 @@ void loop() {
   // Redraw LCD when state changed
   if (needsLCDUpdate) { updateLCD(); needsLCDUpdate = false; }
 
-  // Scroll long words on line 1
+  // Scroll long words on line 0 (top — word being composed)
   if (wordLen > LCD_COLS && millis() - lastScrollTime >= LCD_SCROLL_MS) {
     lastScrollTime = millis();
     if (++scrollOffset > wordLen - LCD_COLS) scrollOffset = 0;
     char slice[LCD_COLS + 1];
     strncpy(slice, wordBuffer + scrollOffset, LCD_COLS);
     slice[LCD_COLS] = '\0';
-    lcdPrint(1, slice);
+    lcdPrint(0, slice);
   }
 
   // Poll for incoming AI response written by the Raspberry Pi
@@ -386,8 +389,8 @@ void loop() {
     needsLCDUpdate = true;
   }
 
-  // Scroll AI response across line 0 when morseLen == 0
-  if (showingAIResponse && morseLen == 0 &&
+  // Scroll AI response on line 1 (bottom — Pi's reply)
+  if (showingAIResponse &&
       aiResponseLen > LCD_COLS &&
       millis() - lastAIScrollTime >= LCD_SCROLL_MS) {
     lastAIScrollTime = millis();
@@ -395,6 +398,6 @@ void loop() {
     char slice[LCD_COLS + 1];
     strncpy(slice, aiResponse + aiScrollOffset, LCD_COLS);
     slice[LCD_COLS] = '\0';
-    lcdPrint(0, slice);
+    lcdPrint(1, slice);
   }
 }
