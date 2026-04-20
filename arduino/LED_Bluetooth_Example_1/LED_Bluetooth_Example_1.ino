@@ -29,6 +29,10 @@
  *   Characteristic …def2 – decoded char     (Read|Notify)
  *   Characteristic …def3 – complete word    (Read|Notify)
  *   Characteristic …def4 – status string    (Read|Notify)
+ *   Characteristic …def5 – AI response      (Write) ← new
+ *
+ * The Raspberry Pi writes the AI response text to …def5.
+ * The Arduino scrolls it across LCD line 0 so the user can read it.
  */
 
 #include <ArduinoBLE.h>
@@ -78,10 +82,12 @@ const int MORSE_SIZE = sizeof(MORSE) / sizeof(MORSE[0]);
 
 // ── BLE ──────────────────────────────────────────────────────
 BLEService        morseService("12345678-1234-5678-1234-56789abcdef0");
-BLECharacteristic patternChar ("12345678-1234-5678-1234-56789abcdef1", BLERead|BLENotify,  9);
-BLECharacteristic recognChar  ("12345678-1234-5678-1234-56789abcdef2", BLERead|BLENotify,  2);
-BLECharacteristic wordChar    ("12345678-1234-5678-1234-56789abcdef3", BLERead|BLENotify, 51);
-BLECharacteristic statusChar  ("12345678-1234-5678-1234-56789abcdef4", BLERead|BLENotify, 17);
+BLECharacteristic patternChar ("12345678-1234-5678-1234-56789abcdef1", BLERead|BLENotify,   9);
+BLECharacteristic recognChar  ("12345678-1234-5678-1234-56789abcdef2", BLERead|BLENotify,   2);
+BLECharacteristic wordChar    ("12345678-1234-5678-1234-56789abcdef3", BLERead|BLENotify,  51);
+BLECharacteristic statusChar  ("12345678-1234-5678-1234-56789abcdef4", BLERead|BLENotify,  17);
+// responseChar – written by the Raspberry Pi with the AI reply (up to 160 chars + NUL)
+BLECharacteristic responseChar("12345678-1234-5678-1234-56789abcdef5", BLEWrite,           161);
 
 // ── LCD ──────────────────────────────────────────────────────
 LiquidCrystal_I2C lcd(0x27, LCD_COLS, LCD_ROWS);
@@ -97,6 +103,13 @@ int           scrollOffset   = 0;
 unsigned long lastScrollTime = 0;
 bool          needsLCDUpdate = true;
 bool          bleConnected   = false;
+
+// AI response scroll state
+char          aiResponse[162]    = "";   // last AI reply received
+int           aiResponseLen      = 0;
+int           aiScrollOffset     = 0;
+unsigned long lastAIScrollTime   = 0;
+bool          showingAIResponse  = false;
 
 // ── Button debounce state ─────────────────────────────────────
 struct ButtonState { bool lastRaw; bool held; unsigned long edgeTime; };
@@ -145,11 +158,24 @@ char decodeMorse(const char *pattern) {
 // Redraw both LCD lines from current state.
 void updateLCD() {
   lcd.clear();
-  // Line 1: pattern being built, or BLE status when idle
-  if (morseLen > 0)  lcdPrint(0, morsePattern);
-  else               lcdPrint(0, bleConnected ? "BLE Connected " : "BLE Searching.");
-  // Line 2: word buffer (scrolling handled in loop)
-  if (wordLen == 0)         lcdPrint(1, "");
+  // Line 0: morse pattern being built; AI response when idle; BLE status otherwise
+  if (morseLen > 0) {
+    lcdPrint(0, morsePattern);
+  } else if (showingAIResponse && aiResponseLen > 0) {
+    // Scrolling handled in loop(); just show the current slice here on demand
+    if (aiResponseLen <= LCD_COLS) {
+      lcdPrint(0, aiResponse);
+    } else {
+      char slice[LCD_COLS + 1];
+      strncpy(slice, aiResponse + aiScrollOffset, LCD_COLS);
+      slice[LCD_COLS] = '\0';
+      lcdPrint(0, slice);
+    }
+  } else {
+    lcdPrint(0, bleConnected ? "BLE Connected " : "BLE Searching.");
+  }
+  // Line 1: word buffer (scrolling handled in loop)
+  if (wordLen == 0)             lcdPrint(1, "");
   else if (wordLen <= LCD_COLS) lcdPrint(1, wordBuffer);
   else {
     char slice[LCD_COLS + 1];
@@ -191,6 +217,7 @@ void eraseAll() {
   morsePattern[0] = '\0'; morseLen = 0;
   wordBuffer[0]   = '\0'; wordLen  = 0;
   lastInputTime = scrollOffset = 0; lastScrollTime = 0;
+  showingAIResponse = false;
   patternChar.writeValue((uint8_t *)"", 0);
   recognChar .writeValue((uint8_t *)"", 0);
   wordChar   .writeValue((uint8_t *)"", 0);
@@ -245,6 +272,7 @@ void setup() {
   morseService.addCharacteristic(recognChar);
   morseService.addCharacteristic(wordChar);
   morseService.addCharacteristic(statusChar);
+  morseService.addCharacteristic(responseChar);
   BLE.addService(morseService);
   patternChar.writeValue((uint8_t *)"", 0);
   recognChar .writeValue((uint8_t *)"", 0);
@@ -332,7 +360,7 @@ void loop() {
   // Redraw LCD when state changed
   if (needsLCDUpdate) { updateLCD(); needsLCDUpdate = false; }
 
-  // Scroll long words on line 2
+  // Scroll long words on line 1
   if (wordLen > LCD_COLS && millis() - lastScrollTime >= LCD_SCROLL_MS) {
     lastScrollTime = millis();
     if (++scrollOffset > wordLen - LCD_COLS) scrollOffset = 0;
@@ -340,5 +368,32 @@ void loop() {
     strncpy(slice, wordBuffer + scrollOffset, LCD_COLS);
     slice[LCD_COLS] = '\0';
     lcdPrint(1, slice);
+  }
+
+  // Poll for incoming AI response written by the Raspberry Pi
+  if (responseChar.written()) {
+    int len = (int)responseChar.valueLength();
+    if (len > 160) len = 160;
+    memcpy(aiResponse, responseChar.value(), len);
+    aiResponse[len]   = '\0';
+    aiResponseLen     = len;
+    aiScrollOffset    = 0;
+    lastAIScrollTime  = millis();
+    showingAIResponse = true;
+    Serial.print(F("AI response received: ")); Serial.println(aiResponse);
+    flashRGB(false, false, true);   // blue flash = reply arrived
+    needsLCDUpdate = true;
+  }
+
+  // Scroll AI response across line 0 when morseLen == 0
+  if (showingAIResponse && morseLen == 0 &&
+      aiResponseLen > LCD_COLS &&
+      millis() - lastAIScrollTime >= LCD_SCROLL_MS) {
+    lastAIScrollTime = millis();
+    if (++aiScrollOffset > aiResponseLen - LCD_COLS) aiScrollOffset = 0;
+    char slice[LCD_COLS + 1];
+    strncpy(slice, aiResponse + aiScrollOffset, LCD_COLS);
+    slice[LCD_COLS] = '\0';
+    lcdPrint(0, slice);
   }
 }
