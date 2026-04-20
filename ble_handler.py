@@ -105,8 +105,10 @@ class BLECentralHandler:
             return
 
         async def _write():
+            if not text:
+                return
             encoded = text.encode("utf-8", errors="replace")
-            for i in range(0, max(1, len(encoded)), MAX_RESPONSE_BYTES):
+            for i in range(0, len(encoded), MAX_RESPONSE_BYTES):
                 chunk = encoded[i : i + MAX_RESPONSE_BYTES]
                 try:
                     await self._client.write_gatt_char(RESP_CHAR_UUID, chunk,

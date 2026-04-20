@@ -54,10 +54,11 @@ const unsigned long LED_FLASH_MS    = 120;
 const unsigned long LCD_SCROLL_MS   = 400;
 
 // ── Sizes ────────────────────────────────────────────────────
-const int MAX_PATTERN = 8;   // '$' = "...-..-" is 7 chars; +1 for NUL
-const int MAX_WORD    = 50;
-const int LCD_COLS    = 14;
-const int LCD_ROWS    = 2;
+const int MAX_PATTERN       = 8;    // '$' = "...-..-" is 7 chars; +1 for NUL
+const int MAX_WORD          = 50;
+const int LCD_COLS          = 14;
+const int LCD_ROWS          = 2;
+const int MAX_RESPONSE_BYTES = 160; // must match MAX_RESPONSE_BYTES in ble_handler.py
 
 // ── Morse table ──────────────────────────────────────────────
 // One entry per character: { letter/digit/symbol, pattern }
@@ -86,8 +87,8 @@ BLECharacteristic patternChar ("12345678-1234-5678-1234-56789abcdef1", BLERead|B
 BLECharacteristic recognChar  ("12345678-1234-5678-1234-56789abcdef2", BLERead|BLENotify,   2);
 BLECharacteristic wordChar    ("12345678-1234-5678-1234-56789abcdef3", BLERead|BLENotify,  51);
 BLECharacteristic statusChar  ("12345678-1234-5678-1234-56789abcdef4", BLERead|BLENotify,  17);
-// responseChar – written by the Raspberry Pi with the AI reply (up to 160 chars + NUL)
-BLECharacteristic responseChar("12345678-1234-5678-1234-56789abcdef5", BLEWrite,           161);
+// responseChar – written by the Raspberry Pi with the AI reply (up to MAX_RESPONSE_BYTES + NUL)
+BLECharacteristic responseChar("12345678-1234-5678-1234-56789abcdef5", BLEWrite, MAX_RESPONSE_BYTES + 1);
 
 // ── LCD ──────────────────────────────────────────────────────
 LiquidCrystal_I2C lcd(0x27, LCD_COLS, LCD_ROWS);
@@ -105,7 +106,7 @@ bool          needsLCDUpdate = true;
 bool          bleConnected   = false;
 
 // AI response scroll state
-char          aiResponse[162]    = "";   // last AI reply received
+char          aiResponse[MAX_RESPONSE_BYTES + 2] = "";   // last AI reply received (+2 for safety)
 int           aiResponseLen      = 0;
 int           aiScrollOffset     = 0;
 unsigned long lastAIScrollTime   = 0;
@@ -373,7 +374,7 @@ void loop() {
   // Poll for incoming AI response written by the Raspberry Pi
   if (responseChar.written()) {
     int len = (int)responseChar.valueLength();
-    if (len > 160) len = 160;
+    if (len > MAX_RESPONSE_BYTES) len = MAX_RESPONSE_BYTES;
     memcpy(aiResponse, responseChar.value(), len);
     aiResponse[len]   = '\0';
     aiResponseLen     = len;

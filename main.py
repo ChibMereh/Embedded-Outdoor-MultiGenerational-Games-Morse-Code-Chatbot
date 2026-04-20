@@ -193,9 +193,10 @@ class MorseCodeChatbot:
 
         def _timer(generation):
             time.sleep(MESSAGE_TIMEOUT_S)
-            if generation == self._timeout_generation:
-                logger.info("Message timeout – treating accumulated words as full message")
-                self.on_message_end()
+            with self._timeout_lock:
+                if generation == self._timeout_generation:
+                    logger.info("Message timeout – treating accumulated words as full message")
+                    self.on_message_end()
 
         t = threading.Thread(target=_timer, args=(gen,), daemon=True,
                              name="MsgTimeoutThread")
