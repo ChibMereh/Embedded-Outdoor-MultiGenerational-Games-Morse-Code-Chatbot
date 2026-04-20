@@ -32,7 +32,10 @@
  *   Characteristic …def5 – AI response      (Write) ← new
  *
  * The Raspberry Pi writes the AI response text to …def5.
- * The Arduino scrolls it across LCD line 0 so the user can read it.
+ * The Arduino plays the response as Morse code on the RGB LED
+ * (white flash = dot, cyan flash = dash) so the user can try to decode it,
+ * then scrolls the full text on LCD line 1 to reveal the answer.
+ * Press ERASE during playback to skip straight to the text.
  */
 
 #include <ArduinoBLE.h>
@@ -52,6 +55,14 @@ const unsigned long DEBOUNCE_MS     = 50;
 const unsigned long CHAR_TIMEOUT_MS = 800;
 const unsigned long LED_FLASH_MS    = 120;
 const unsigned long LCD_SCROLL_MS   = 400;
+
+// ── Morse playback timing (AI response → LED) ─────────────────
+// Standard Morse ratios: dot=1, dash=3, elem-gap=1, char-gap=3, word-gap=7
+const unsigned long MP_DOT_MS   = 150;   // 1 unit
+const unsigned long MP_DASH_MS  = 450;   // 3 units
+const unsigned long MP_ELEM_MS  = 150;   // gap between elements within a char
+const unsigned long MP_CHAR_MS  = 450;   // gap between characters
+const unsigned long MP_WORD_MS  = 1050;  // gap between words
 
 // ── Sizes ────────────────────────────────────────────────────
 const int MAX_PATTERN       = 8;    // '$' = "...-..-" is 7 chars; +1 for NUL
@@ -104,6 +115,15 @@ int           scrollOffset   = 0;
 unsigned long lastScrollTime = 0;
 bool          needsLCDUpdate = true;
 bool          bleConnected   = false;
+
+// Morse playback state (AI response played as LED flashes)
+enum MorsePlayState { MP_IDLE, MP_SYMBOL_ON, MP_ELEM_GAP, MP_CHAR_GAP, MP_WORD_GAP };
+MorsePlayState mpState         = MP_IDLE;
+int            mpTextPos       = 0;         // index into aiResponse
+int            mpPatPos        = 0;         // index within mpCurrentPat
+char           mpCurrentPat[MAX_PATTERN] = "";
+unsigned long  mpEventTime     = 0;
+bool           mpPlaying       = false;
 
 // AI response scroll state
 char          aiResponse[MAX_RESPONSE_BYTES + 2] = "";   // last AI reply received (+2 for safety)
@@ -174,8 +194,10 @@ void updateLCD() {
   } else {
     lcdPrint(0, bleConnected ? "BLE Connected " : "BLE Searching.");
   }
-  // Line 1 (bottom): AI response from the Raspberry Pi (scrolling handled in loop)
-  if (showingAIResponse && aiResponseLen > 0) {
+  // Line 1 (bottom): "Decode it!" during Morse playback; AI text once done
+  if (mpPlaying) {
+    lcdPrint(1, "Decode it!    ");
+  } else if (showingAIResponse && aiResponseLen > 0) {
     if (aiResponseLen <= LCD_COLS) {
       lcdPrint(1, aiResponse);
     } else {
@@ -228,6 +250,94 @@ void eraseAll() {
   statusChar .writeValue((uint8_t *)"ERASED", 6);
   needsLCDUpdate = true;
   Serial.println(F("Erased"));
+}
+
+// Begin non-blocking Morse playback of aiResponse on the RGB LED.
+void startMorsePlay() {
+  mpTextPos       = 0;
+  mpPatPos        = 0;
+  mpCurrentPat[0] = '\0';
+  mpPlaying       = true;
+  mpState         = MP_CHAR_GAP;          // brief initial pause before first symbol
+  mpEventTime     = millis() + MP_CHAR_MS;
+  showingAIResponse = false;              // text revealed only after playback
+  Serial.println(F("Morse playback started"));
+}
+
+// Advance Morse playback one tick; called every loop() iteration.
+// LED: white flash = dot, cyan flash = dash (matches button colours).
+void tickMorsePlay() {
+  if (!mpPlaying || millis() < mpEventTime) return;
+
+  switch (mpState) {
+
+    case MP_SYMBOL_ON:
+      // Symbol finished – turn LED off, decide next step
+      digitalWrite(PIN_LED_R, LOW);
+      digitalWrite(PIN_LED_G, LOW);
+      digitalWrite(PIN_LED_B, LOW);
+      mpPatPos++;
+      if (mpCurrentPat[mpPatPos] != '\0') {
+        mpState     = MP_ELEM_GAP;
+        mpEventTime = millis() + MP_ELEM_MS;
+      } else {
+        mpState     = MP_CHAR_GAP;
+        mpEventTime = millis() + MP_CHAR_MS;
+      }
+      break;
+
+    case MP_ELEM_GAP:
+      // Element gap done – play next element of current character
+      {
+        bool isDash = (mpCurrentPat[mpPatPos] == '-');
+        digitalWrite(PIN_LED_R, isDash ? LOW  : HIGH);   // white=dot, cyan=dash
+        digitalWrite(PIN_LED_G, HIGH);
+        digitalWrite(PIN_LED_B, HIGH);
+        mpEventTime = millis() + (isDash ? MP_DASH_MS : MP_DOT_MS);
+        mpState = MP_SYMBOL_ON;
+      }
+      break;
+
+    case MP_CHAR_GAP:
+    case MP_WORD_GAP:
+    default: {
+      // Gap done – load next character from aiResponse
+      digitalWrite(PIN_LED_R, LOW);
+      digitalWrite(PIN_LED_G, LOW);
+      digitalWrite(PIN_LED_B, LOW);
+      while (mpTextPos < aiResponseLen) {
+        char c = aiResponse[mpTextPos++];
+        if (c == ' ' || c == '\n' || c == '\r') {
+          mpState     = MP_WORD_GAP;
+          mpEventTime = millis() + MP_WORD_MS;
+          return;
+        }
+        char cu = (char)toupper((unsigned char)c);
+        for (int i = 0; i < MORSE_SIZE; i++) {
+          if (MORSE[i].ch == cu) {
+            strncpy(mpCurrentPat, MORSE[i].pat, MAX_PATTERN - 1);
+            mpCurrentPat[MAX_PATTERN - 1] = '\0';
+            mpPatPos = 0;
+            bool isDash = (mpCurrentPat[0] == '-');
+            digitalWrite(PIN_LED_R, isDash ? LOW  : HIGH);
+            digitalWrite(PIN_LED_G, HIGH);
+            digitalWrite(PIN_LED_B, HIGH);
+            mpEventTime = millis() + (isDash ? MP_DASH_MS : MP_DOT_MS);
+            mpState = MP_SYMBOL_ON;
+            return;
+          }
+        }
+        // character not in Morse table – skip it
+      }
+      // Reached end of response – playback complete, reveal the text
+      mpPlaying         = false;
+      mpState           = MP_IDLE;
+      showingAIResponse = true;
+      needsLCDUpdate    = true;
+      Serial.println(F("Morse playback complete"));
+      break;
+    }
+  }
 }
 
 // Transmit word via BLE, show SENDING/SENT on LCD, then reset.
@@ -342,10 +452,22 @@ void loop() {
     flashRGB(false, true, true);
   }
 
-  // ERASE → red flash
+  // ERASE → red flash; during Morse playback, skip to text reveal instead
   if (pressed(PIN_ERASE, btnErase)) {
     Serial.println(F("ERASE"));
-    eraseAll();
+    if (mpPlaying) {
+      mpPlaying = false;
+      mpState   = MP_IDLE;
+      digitalWrite(PIN_LED_R, LOW);
+      digitalWrite(PIN_LED_G, LOW);
+      digitalWrite(PIN_LED_B, LOW);
+      ledOffTime        = 0;
+      showingAIResponse = true;
+      needsLCDUpdate    = true;
+      Serial.println(F("Morse playback skipped"));
+    } else {
+      eraseAll();
+    }
     flashRGB(true, false, false);
   }
 
@@ -383,11 +505,15 @@ void loop() {
     aiResponseLen     = len;
     aiScrollOffset    = 0;
     lastAIScrollTime  = millis();
-    showingAIResponse = true;
+    showingAIResponse = false;              // text hidden until Morse playback ends
     Serial.print(F("AI response received: ")); Serial.println(aiResponse);
-    flashRGB(false, false, true);   // blue flash = reply arrived
+    flashRGB(false, false, true);           // blue flash = reply arrived
     needsLCDUpdate = true;
+    startMorsePlay();                       // play response as Morse, then reveal text
   }
+
+  // Advance non-blocking Morse playback of AI response
+  tickMorsePlay();
 
   // Scroll AI response on line 1 (bottom — Pi's reply)
   if (showingAIResponse &&
