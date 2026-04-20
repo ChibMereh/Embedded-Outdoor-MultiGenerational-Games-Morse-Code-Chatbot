@@ -1,777 +1,344 @@
 /**
  * LED_Bluetooth_Example_1.ino
+ * Morse Code Encoder – Arduino Nano 33 BLE
  *
- * Morse Code Encoder for Arduino Nano 33 BLE
- * with 14-Character Serial LCD Display Integration
+ * HARDWARE (all pins changeable below)
+ *   Pin 2 – DOT button   (to GND, INPUT_PULLUP)  → white LED
+ *   Pin 3 – DASH button  (to GND, INPUT_PULLUP)  → cyan LED
+ *   Pin 4 – ERASE button (to GND, INPUT_PULLUP)  → red LED
+ *   Pin 5 – SEND button  (to GND, INPUT_PULLUP)  → blue LED
+ *   Pin 6 – RGB LED red channel   (220 Ω to GND)
+ *   Pin 7 – RGB LED green channel (220 Ω to GND)
+ *   Pin 8 – RGB LED blue channel  (220 Ω to GND)
+ *   I2C LCD 14×2, address 0x27 (try 0x3F if blank)
+ *     SDA → Nano SDA   SCL → Nano SCL
  *
- * ──────────────────────────────────────────────────────────
- * HARDWARE REQUIREMENTS
- * ──────────────────────────────────────────────────────────
- * Board  : Arduino Nano 33 BLE  (nRF52840 / ARM Cortex-M4)
+ * LIBRARIES (Arduino Library Manager)
+ *   ArduinoBLE  •  LiquidCrystal I2C
  *
- * Buttons (connect between pin and GND – INPUT_PULLUP used):
- *   Pin 2  – Button 1 : DOT   (•)  → white LED flash
- *   Pin 3  – Button 2 : DASH  (-)  → cyan  LED flash
- *   Pin 4  – Button 3 : ERASE      → red   LED flash
- *   Pin 5  – Button 4 : SEND       → blue  LED flash
+ * HOW IT WORKS
+ *   1. Press DOT / DASH – symbol appears on LCD line 1
+ *   2. After 800 ms inactivity the pattern is decoded
+ *      – decoded character added to LCD line 2 (green flash)
+ *      – unknown pattern shows "?" (orange flash)
+ *   3. Press SEND to transmit the word via BLE (blue flash)
+ *   4. Press ERASE to clear pattern + word (red flash)
  *
- * RGB LED (common-cathode; HIGH = on):
- *   Pin 6  – Red channel
- *   Pin 7  – Green channel
- *   Pin 8  – Blue channel
- *
- * LCD (HD44780 + I2C backpack, e.g. PCF8574):
- *   I2C address 0x27 (change to 0x3F if display is blank)
- *   14 columns × 2 rows
- *   SDA → A4 / SDA pin on Nano 33 BLE
- *   SCL → A5 / SCL pin on Nano 33 BLE
- *   Powered from 5 V or 3.3 V depending on your backpack
- *
- * ──────────────────────────────────────────────────────────
- * ARDUINO LIBRARY DEPENDENCIES (install via Library Manager)
- * ──────────────────────────────────────────────────────────
- *   • ArduinoBLE  (by Arduino)
- *   • LiquidCrystal I2C  (by Frank de Brabander)
- *
- * ──────────────────────────────────────────────────────────
- * INTERACTION SUMMARY
- * ──────────────────────────────────────────────────────────
- *   1. Press DOT  → "."  appended to pattern on LCD line 1
- *   2. Press DASH → "-"  appended to pattern on LCD line 1
- *   3. After 800 ms of inactivity the pattern is decoded
- *      → recognised character shown on LCD line 2 (green flash)
- *      → unknown pattern shows "?" (orange flash)
- *   4. Repeat for more characters to build up a word
- *   5. Press SEND  → word transmitted via BLE, LCD shows "SENT"
- *   6. Press ERASE → clears pattern and word buffer (red flash)
- *
- * To enter a word-space character (' ') enter the Morse
- * sequence for '/' (dash · dot · dot · dash · dot = "-..-.")
- * which is interpreted as a word-separator in this system.
- *
- * ──────────────────────────────────────────────────────────
- * BLE SERVICE / CHARACTERISTICS
- * ──────────────────────────────────────────────────────────
- *   Service  : "12345678-1234-5678-1234-56789abcdef0"
- *   Char 1   : Current morse pattern    (Read | Notify)
- *   Char 2   : Recognised character     (Read | Notify)
- *   Char 3   : Complete word / message  (Read | Notify)
- *   Char 4   : Status updates           (Read | Notify)
- *
- * ──────────────────────────────────────────────────────────
- * Project : Embedded Outdoor Multi-Generational Games –
- *           Morse Code Chatbot
- * License : MIT
- * ──────────────────────────────────────────────────────────
+ * BLE service  12345678-1234-5678-1234-56789abcdef0
+ *   Characteristic …def1 – current pattern  (Read|Notify)
+ *   Characteristic …def2 – decoded char     (Read|Notify)
+ *   Characteristic …def3 – complete word    (Read|Notify)
+ *   Characteristic …def4 – status string    (Read|Notify)
  */
 
 #include <ArduinoBLE.h>
 #include <LiquidCrystal_I2C.h>
 
-// ============================================================
-// PROGMEM COMPATIBILITY (ARM Cortex-M4 / Arduino Nano 33 BLE)
-//
-// On AVR boards PROGMEM places data in flash and requires
-// special read macros.  On the Nano 33 BLE (ARM) const data
-// already lives in flash, so the macros are no-ops.
-// Defining them here keeps the code portable.
-// ============================================================
-#ifdef __AVR__
-  #include <avr/pgmspace.h>
-#else
-  #ifndef PROGMEM
-    #define PROGMEM
-  #endif
-  #ifndef pgm_read_byte
-    #define pgm_read_byte(addr)  (*(const uint8_t *)(addr))
-  #endif
-  #ifndef pgm_read_word
-    #define pgm_read_word(addr)  (*(const uint16_t *)(addr))
-  #endif
-  #ifndef memcpy_P
-    #define memcpy_P             memcpy
-  #endif
-  #ifndef strcmp_P
-    #define strcmp_P             strcmp
-  #endif
-  #ifndef strlen_P
-    #define strlen_P             strlen
-  #endif
-#endif
+// ── Pin assignments ──────────────────────────────────────────
+const int PIN_DOT   = 2;
+const int PIN_DASH  = 3;
+const int PIN_ERASE = 4;
+const int PIN_SEND  = 5;
+const int PIN_LED_R = 6;
+const int PIN_LED_G = 7;
+const int PIN_LED_B = 8;
 
-// ============================================================
-// PIN ASSIGNMENTS
-// ============================================================
-const int PIN_DOT   = 2;   // Dot   button
-const int PIN_DASH  = 3;   // Dash  button
-const int PIN_ERASE = 4;   // Erase button
-const int PIN_SEND  = 5;   // Send  button
+// ── Timing (ms) ──────────────────────────────────────────────
+const unsigned long DEBOUNCE_MS     = 50;
+const unsigned long CHAR_TIMEOUT_MS = 800;
+const unsigned long LED_FLASH_MS    = 120;
+const unsigned long LCD_SCROLL_MS   = 400;
 
-const int PIN_LED_R = 6;   // RGB LED – red   channel
-const int PIN_LED_G = 7;   // RGB LED – green channel
-const int PIN_LED_B = 8;   // RGB LED – blue  channel
+// ── Sizes ────────────────────────────────────────────────────
+const int MAX_PATTERN = 8;   // '$' = "...-..-" is 7 chars; +1 for NUL
+const int MAX_WORD    = 50;
+const int LCD_COLS    = 14;
+const int LCD_ROWS    = 2;
 
-// ============================================================
-// TIMING CONSTANTS  (milliseconds)
-// ============================================================
-const unsigned long DEBOUNCE_MS     = 50;   // Button debounce window
-const unsigned long CHAR_TIMEOUT_MS = 800;  // Auto-finalise after inactivity
-const unsigned long LED_FLASH_MS    = 120;  // LED flash duration
-const unsigned long LCD_SCROLL_MS   = 400;  // Word-scroll interval on LCD
+// ── Morse table ──────────────────────────────────────────────
+// One entry per character: { letter/digit/symbol, pattern }
+struct MorseEntry { char ch; const char *pat; };
 
-// ============================================================
-// BUFFER SIZES
-// ============================================================
-const int MAX_PATTERN_LEN  = 8;   // Max dots/dashes per character (7 + NUL)
-const int MAX_WORD_LEN     = 50;  // Max characters in the word buffer
-const int LCD_COLS         = 14;  // Display width (columns)
-const int LCD_ROWS         = 2;   // Display height (rows)
-
-// ============================================================
-// MORSE CODE LIBRARY  (PROGMEM – flash storage)
-//
-// Two parallel arrays:
-//   MORSE_CHARS    – the printable character each pattern maps to
-//   MORSE_PATTERNS – the corresponding dot/dash string
-//
-// Pattern strings are stored in a 2-D char array padded with
-// NUL bytes so every row is exactly MAX_PATTERN_LEN bytes.
-// This lets memcpy_P copy a complete pattern in one call on
-// both AVR and ARM targets.
-//
-// International Morse Code  (ITU-R M.1677-1)
-// ============================================================
-#define MORSE_TABLE_SIZE 54
-
-const char MORSE_CHARS[MORSE_TABLE_SIZE] PROGMEM = {
-  /* A-Z */
-  'A','B','C','D','E','F','G','H','I','J','K','L','M',
-  'N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
-  /* 0-9 */
-  '0','1','2','3','4','5','6','7','8','9',
-  /* Punctuation (18 symbols; space is handled by the SEND workflow) */
-  '.', ',', '?', '\'','!', '/', '(', ')', '&', ':',
-  ';', '=', '+', '-', '_', '"', '$', '@'
+const MorseEntry MORSE[] = {
+  {'A',".-"},    {'B',"-..."},  {'C',"-.-."}, {'D',"-.."}, {'E',"."},
+  {'F',"..-."},  {'G',"--."},   {'H',"...."},  {'I',".."},  {'J',".---"},
+  {'K',"-.-"},   {'L',".-.."},  {'M',"--"},    {'N',"-."},  {'O',"---"},
+  {'P',".--."},  {'Q',"--.-"},  {'R',".-."},   {'S',"..."},  {'T',"-"},
+  {'U',"..-"},   {'V',"...-"},  {'W',".--"},   {'X',"-..-"}, {'Y',"-.--"},
+  {'Z',"--.."},
+  {'0',"-----"}, {'1',".----"}, {'2',"..---"}, {'3',"...--"},{'4',"....-"},
+  {'5',"....."}, {'6',"-...."},  {'7',"--..."}, {'8',"---.."}, {'9',"----."},
+  {'.', ".-.-.-"}, {',', "--..--"}, {'?', "..--.."}, {'\'', ".----."},
+  {'!', "-.-.--"}, {'/', "-..-."}, {'(', "-.--."}, {')', "-.--.-"},
+  {'&', ".-..."}, {':', "---..."}, {';', "-.-.-."}, {'=', "-...-"},
+  {'+', ".-.-."}, {'-', "-....-"}, {'_', "..--.-"}, {'"', ".-..-."},
+  {'$', "...-..-"}, {'@', ".--.-."}
 };
+const int MORSE_SIZE = sizeof(MORSE) / sizeof(MORSE[0]);
 
-/* Each row is MAX_PATTERN_LEN bytes (pattern + NUL padding). */
-const char MORSE_PATTERNS[MORSE_TABLE_SIZE][MAX_PATTERN_LEN] PROGMEM = {
-  /* A */ ".-",
-  /* B */ "-...",
-  /* C */ "-.-.",
-  /* D */ "-..",
-  /* E */ ".",
-  /* F */ "..-.",
-  /* G */ "--.",
-  /* H */ "....",
-  /* I */ "..",
-  /* J */ ".---",
-  /* K */ "-.-",
-  /* L */ ".-..",
-  /* M */ "--",
-  /* N */ "-.",
-  /* O */ "---",
-  /* P */ ".--.",
-  /* Q */ "--.-",
-  /* R */ ".-.",
-  /* S */ "...",
-  /* T */ "-",
-  /* U */ "..-",
-  /* V */ "...-",
-  /* W */ ".--",
-  /* X */ "-..-",
-  /* Y */ "-.--",
-  /* Z */ "--..",
-  /* 0 */ "-----",
-  /* 1 */ ".----",
-  /* 2 */ "..---",
-  /* 3 */ "...--",
-  /* 4 */ "....-",
-  /* 5 */ ".....",
-  /* 6 */ "-....",
-  /* 7 */ "--...",
-  /* 8 */ "---..",
-  /* 9 */ "----.",
-  /* . */ ".-.-.-",
-  /* , */ "--..--",
-  /* ? */ "..--..",
-  /* ' */ ".----.",
-  /* ! */ "-.-.--",
-  /* / */ "-..-.",
-  /* ( */ "-.--.",
-  /* ) */ "-.--.-",
-  /* & */ ".-...",
-  /* : */ "---...",
-  /* ; */ "-.-.-.",
-  /* = */ "-...-",
-  /* + */ ".-.-.",
-  /* - */ "-....-",
-  /* _ */ "..--.-",   /* ITU '_' = ..--.-  (differs from '?' = ..--..  in its last element) */
-  /* " */ ".-..-.",
-  /* $ */ "...-..-",
-  /* @ */ ".--.-."
-};
-/*
- * NOTE: '?' = "..--.." and '_' = "..--.-" differ only in the
- * final element and are correctly stored as separate entries.
- *
- * Word spacing: the '/' character (pattern "-..-." =
- * dash·dot·dot·dash·dot) is the nearest usable in-band word
- * separator.  The SEND button transmits the current word and
- * resets the buffer, which is the primary way to delimit words.
- */
+// ── BLE ──────────────────────────────────────────────────────
+BLEService        morseService("12345678-1234-5678-1234-56789abcdef0");
+BLECharacteristic patternChar ("12345678-1234-5678-1234-56789abcdef1", BLERead|BLENotify,  9);
+BLECharacteristic recognChar  ("12345678-1234-5678-1234-56789abcdef2", BLERead|BLENotify,  2);
+BLECharacteristic wordChar    ("12345678-1234-5678-1234-56789abcdef3", BLERead|BLENotify, 51);
+BLECharacteristic statusChar  ("12345678-1234-5678-1234-56789abcdef4", BLERead|BLENotify, 17);
 
-// ============================================================
-// BLE SERVICE & CHARACTERISTICS
-// ============================================================
-#define BLE_SERVICE_UUID        "12345678-1234-5678-1234-56789abcdef0"
-#define BLE_CHAR_PATTERN_UUID   "12345678-1234-5678-1234-56789abcdef1"
-#define BLE_CHAR_CHAR_UUID      "12345678-1234-5678-1234-56789abcdef2"
-#define BLE_CHAR_WORD_UUID      "12345678-1234-5678-1234-56789abcdef3"
-#define BLE_CHAR_STATUS_UUID    "12345678-1234-5678-1234-56789abcdef4"
-
-BLEService morseService(BLE_SERVICE_UUID);
-
-/* Value sizes: pattern ≤ 8 bytes, char = 1 byte, word ≤ 50 bytes, status ≤ 16 bytes */
-BLECharacteristic patternChar  (BLE_CHAR_PATTERN_UUID, BLERead | BLENotify,  9);
-BLECharacteristic recognChar   (BLE_CHAR_CHAR_UUID,    BLERead | BLENotify,  2);
-BLECharacteristic wordChar     (BLE_CHAR_WORD_UUID,    BLERead | BLENotify, 51);
-BLECharacteristic statusChar   (BLE_CHAR_STATUS_UUID,  BLERead | BLENotify, 17);
-
-// ============================================================
-// LCD  (I2C address 0x27 – change to 0x3F if blank)
-// ============================================================
+// ── LCD ──────────────────────────────────────────────────────
 LiquidCrystal_I2C lcd(0x27, LCD_COLS, LCD_ROWS);
 
-// ============================================================
-// APPLICATION STATE
-// ============================================================
-
-/* --- Morse pattern buffer --- */
-char morsePattern[MAX_PATTERN_LEN] = "";   // Pattern being built
-int  morseLen                       = 0;   // Current length
-
-/* --- Word buffer --- */
-char wordBuffer[MAX_WORD_LEN + 1] = "";    // Accumulated characters
-int  wordLen                       = 0;
-
-/* --- Timing --- */
-unsigned long lastInputTime  = 0;   // Timestamp of most recent dot/dash
-unsigned long ledOffTime     = 0;   // When to turn the LED off
-
-/* --- LCD scrolling for long words on line 2 --- */
+// ── State ────────────────────────────────────────────────────
+char          morsePattern[MAX_PATTERN] = "";
+int           morseLen    = 0;
+char          wordBuffer[MAX_WORD + 1]  = "";
+int           wordLen     = 0;
+unsigned long lastInputTime  = 0;
+unsigned long ledOffTime     = 0;
 int           scrollOffset   = 0;
 unsigned long lastScrollTime = 0;
+bool          needsLCDUpdate = true;
+bool          bleConnected   = false;
 
-/* --- Dirty flag: redraw LCD on next loop iteration --- */
-bool needsLCDUpdate = true;
+// ── Button debounce state ─────────────────────────────────────
+struct ButtonState { bool lastRaw; bool held; unsigned long edgeTime; };
+ButtonState btnDot   = {HIGH, false, 0};
+ButtonState btnDash  = {HIGH, false, 0};
+ButtonState btnErase = {HIGH, false, 0};
+ButtonState btnSend  = {HIGH, false, 0};
 
-/* --- BLE connection state --- */
-bool bleConnected = false;
+// ── Helpers ──────────────────────────────────────────────────
 
-/* --- Per-button debounce state (one set per button) --- */
-struct ButtonState {
-  bool     lastRaw;    // Last raw digitalRead value
-  bool     pressed;    // True while button is considered held
-  unsigned long lastEdgeTime;  // When the last edge was seen
-};
-
-ButtonState btnDot   = { HIGH, false, 0 };
-ButtonState btnDash  = { HIGH, false, 0 };
-ButtonState btnErase = { HIGH, false, 0 };
-ButtonState btnSend  = { HIGH, false, 0 };
-
-// ============================================================
-// FORWARD DECLARATIONS
-// ============================================================
-char  getCharacterForMorse(const char *pattern);
-void  appendToPattern(char symbol);
-void  finalizeCharacter();
-void  eraseCurrentInput();
-void  sendViaBLE(const char *word);
-void  updateBLEPattern();
-void  updateLCD();
-void  flashRGB(bool r, bool g, bool b);
-bool  debounceButton(int pin, ButtonState &btn);
-
-// ============================================================
-// SETUP
-// ============================================================
-void setup() {
-  /* --- Serial monitor (9600 baud) --- */
-  Serial.begin(9600);
-  /* Wait up to 3 s for the host; skip on standalone power-up */
-  while (!Serial && millis() < 3000) {}
-
-  Serial.println(F("==================================="));
-  Serial.println(F(" Morse Code Encoder – Nano 33 BLE"));
-  Serial.println(F("==================================="));
-
-  /* --- Button pins (INPUT_PULLUP: HIGH = released, LOW = pressed) --- */
-  pinMode(PIN_DOT,   INPUT_PULLUP);
-  pinMode(PIN_DASH,  INPUT_PULLUP);
-  pinMode(PIN_ERASE, INPUT_PULLUP);
-  pinMode(PIN_SEND,  INPUT_PULLUP);
-
-  /* --- RGB LED pins --- */
-  pinMode(PIN_LED_R, OUTPUT);
-  pinMode(PIN_LED_G, OUTPUT);
-  pinMode(PIN_LED_B, OUTPUT);
-  digitalWrite(PIN_LED_R, LOW);
-  digitalWrite(PIN_LED_G, LOW);
-  digitalWrite(PIN_LED_B, LOW);
-
-  /* --- LCD --- */
-  lcd.init();
-  lcd.backlight();
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(F("Morse Encoder "));
-  lcd.setCursor(0, 1);
-  lcd.print(F("BLE Starting.."));
-  Serial.println(F("[LCD] Initialised"));
-
-  /* --- BLE --- */
-  if (!BLE.begin()) {
-    Serial.println(F("[BLE] INIT FAILED – halting"));
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print(F("BLE INIT FAIL "));
-    /* Halt with a slow red blink to indicate the fault */
-    while (true) {
-      digitalWrite(PIN_LED_R, HIGH);
-      delay(500);
-      digitalWrite(PIN_LED_R, LOW);
-      delay(500);
-    }
-  }
-
-  BLE.setLocalName("MorseEncoder");
-  BLE.setAdvertisedService(morseService);
-
-  /* Attach characteristics to the service */
-  morseService.addCharacteristic(patternChar);
-  morseService.addCharacteristic(recognChar);
-  morseService.addCharacteristic(wordChar);
-  morseService.addCharacteristic(statusChar);
-
-  BLE.addService(morseService);
-
-  /* Initialise characteristic values */
-  patternChar.writeValue((uint8_t *)"",     0);
-  recognChar .writeValue((uint8_t *)"",     0);
-  wordChar   .writeValue((uint8_t *)"",     0);
-  statusChar .writeValue((uint8_t *)"READY", 5);
-
-  BLE.advertise();
-  Serial.println(F("[BLE] Advertising as 'MorseEncoder'"));
-
-  /* Ready indicator */
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(F("Ready  BLE OK "));
-  lcd.setCursor(0, 1);
-  lcd.print(F("Dot Dash Er Snd"));
-  flashRGB(false, true, false);   // Green: system ready
-  delay(1500);
-  needsLCDUpdate = true;
-}
-
-// ============================================================
-// MAIN LOOP
-// ============================================================
-void loop() {
-  /* ── BLE connection management ─────────────────────────── */
-  BLEDevice central = BLE.central();
-  if (central) {
-    if (!bleConnected) {
-      bleConnected = true;
-      Serial.print(F("[BLE] Connected: "));
-      Serial.println(central.address());
-      statusChar.writeValue((uint8_t *)"CONNECTED", 9);
-      needsLCDUpdate = true;
-    }
-  } else {
-    if (bleConnected) {
-      bleConnected = false;
-      Serial.println(F("[BLE] Disconnected"));
-      statusChar.writeValue((uint8_t *)"DISCONNECTED", 12);
-      needsLCDUpdate = true;
-    }
-  }
-
-  /* ── LED flash timer ────────────────────────────────────── */
-  if (ledOffTime > 0 && millis() >= ledOffTime) {
-    digitalWrite(PIN_LED_R, LOW);
-    digitalWrite(PIN_LED_G, LOW);
-    digitalWrite(PIN_LED_B, LOW);
-    ledOffTime = 0;
-  }
-
-  /* ── Button polling (debounced) ─────────────────────────── */
-
-  /* DOT button → white flash */
-  if (debounceButton(PIN_DOT, btnDot)) {
-    Serial.println(F("[BTN] DOT pressed"));
-    appendToPattern('.');
-    flashRGB(true, true, true);   // White
-  }
-
-  /* DASH button → cyan flash */
-  if (debounceButton(PIN_DASH, btnDash)) {
-    Serial.println(F("[BTN] DASH pressed"));
-    appendToPattern('-');
-    flashRGB(false, true, true);  // Cyan
-  }
-
-  /* ERASE button → red flash */
-  if (debounceButton(PIN_ERASE, btnErase)) {
-    Serial.println(F("[BTN] ERASE pressed"));
-    eraseCurrentInput();
-    flashRGB(true, false, false); // Red
-  }
-
-  /* SEND button → blue flash */
-  if (debounceButton(PIN_SEND, btnSend)) {
-    Serial.println(F("[BTN] SEND pressed"));
-    /* Finalise any in-progress pattern first */
-    if (morseLen > 0) {
-      finalizeCharacter();
-    }
-    if (wordLen > 0) {
-      sendViaBLE(wordBuffer);
-    } else {
-      Serial.println(F("[SEND] Nothing to transmit"));
-    }
-    flashRGB(false, false, true); // Blue
-  }
-
-  /* ── Character auto-finalisation timeout ────────────────── */
-  if (morseLen > 0 && lastInputTime > 0 &&
-      (millis() - lastInputTime) >= CHAR_TIMEOUT_MS) {
-    finalizeCharacter();
-  }
-
-  /* ── LCD refresh ─────────────────────────────────────────── */
-  if (needsLCDUpdate) {
-    updateLCD();
-    needsLCDUpdate = false;
-  }
-
-  /* ── LCD line-2 scrolling for words longer than 14 chars ── */
-  if (wordLen > LCD_COLS && (millis() - lastScrollTime) >= LCD_SCROLL_MS) {
-    lastScrollTime = millis();
-    scrollOffset++;
-    if (scrollOffset > wordLen - LCD_COLS) {
-      /* scrollOffset == wordLen - LCD_COLS is the last valid full-screen position;
-         reset only when we have gone past it so that position is actually displayed. */
-      scrollOffset = 0;  // Wrap
-    }
-    /* Rewrite only line 2 to avoid full clear flicker */
-    lcd.setCursor(0, 1);
-    int end = scrollOffset + LCD_COLS;
-    if (end > wordLen) end = wordLen;
-    for (int i = scrollOffset; i < end; i++) {
-      lcd.print(wordBuffer[i]);
-    }
-    for (int i = end - scrollOffset; i < LCD_COLS; i++) {
-      lcd.print(' ');
-    }
-  }
-}
-
-// ============================================================
-// HELPER: debounceButton
-//
-// Returns true exactly once per physical button press (falling
-// edge, after the debounce window has elapsed).
-// ============================================================
-bool debounceButton(int pin, ButtonState &btn) {
+// Returns true once per press (after debounce settles).
+bool pressed(int pin, ButtonState &b) {
   bool raw = digitalRead(pin);
-
-  /* Detect any edge and start / restart the debounce timer */
-  if (raw != btn.lastRaw) {
-    btn.lastEdgeTime = millis();
-    btn.lastRaw = raw;
-  }
-
-  /* Only act after the signal has been stable for DEBOUNCE_MS */
-  if ((millis() - btn.lastEdgeTime) >= DEBOUNCE_MS) {
-    if (raw == LOW && !btn.pressed) {
-      /* Button is newly pressed */
-      btn.pressed = true;
-      return true;
-    }
-    if (raw == HIGH) {
-      /* Button released – allow the next press */
-      btn.pressed = false;
-    }
+  if (raw != b.lastRaw) { b.edgeTime = millis(); b.lastRaw = raw; }
+  if (millis() - b.edgeTime >= DEBOUNCE_MS) {
+    if (raw == LOW  && !b.held) { b.held = true;  return true; }
+    if (raw == HIGH)             { b.held = false; }
   }
   return false;
 }
 
-// ============================================================
-// HELPER: appendToPattern
-//
-// Adds a dot '.' or dash '-' to the current morse pattern
-// buffer and notifies BLE subscribers.
-// ============================================================
-void appendToPattern(char symbol) {
-  if (morseLen >= MAX_PATTERN_LEN - 1) {
-    /* Pattern too long – ignore and warn */
-    Serial.println(F("[WARN] Pattern buffer full – input ignored"));
-    return;
-  }
-  morsePattern[morseLen++] = symbol;
-  morsePattern[morseLen]   = '\0';
-  lastInputTime = millis();
-
-  updateBLEPattern();
-  needsLCDUpdate = true;
-
-  Serial.print(F("[PATTERN] "));
-  Serial.println(morsePattern);
-}
-
-// ============================================================
-// HELPER: finalizeCharacter
-//
-// Decodes the current morse pattern, appends the result to
-// the word buffer, updates BLE characteristics and LCD, then
-// clears the pattern ready for the next character.
-// ============================================================
-void finalizeCharacter() {
-  if (morseLen == 0) return;
-
-  char decoded = getCharacterForMorse(morsePattern);
-
-  if (decoded != '\0') {
-    /* ── Recognised ── */
-    Serial.print(F("[DECODE] "));
-    Serial.print(morsePattern);
-    Serial.print(F(" -> '"));
-    Serial.print(decoded);
-    Serial.println(F("'"));
-
-    /* Update BLE "recognised character" characteristic */
-    char charStr[2] = { decoded, '\0' };
-    recognChar.writeValue((uint8_t *)charStr, 1);
-
-    /* Append to word buffer */
-    if (wordLen < MAX_WORD_LEN) {
-      wordBuffer[wordLen++] = decoded;
-      wordBuffer[wordLen]   = '\0';
-      wordChar.writeValue((uint8_t *)wordBuffer, (unsigned int)wordLen);
-    } else {
-      Serial.println(F("[WARN] Word buffer full"));
-    }
-
-    flashRGB(false, true, false);  // Green: successful decode
-
-  } else {
-    /* ── Unknown pattern ── */
-    Serial.print(F("[ERROR] Unknown pattern: "));
-    Serial.println(morsePattern);
-
-    statusChar.writeValue((uint8_t *)"UNKNOWN", 7);
-
-    /* Brief "?" on line 2 */
-    lcd.setCursor(0, 1);
-    lcd.print(F("? Unknown     "));
-    delay(600);
-
-    /* Orange ≈ red + green */
-    flashRGB(true, true, false);
-  }
-
-  /* Reset pattern state */
-  morsePattern[0] = '\0';
-  morseLen        = 0;
-  lastInputTime   = 0;
-  scrollOffset    = 0;
-  lastScrollTime  = 0;
-
-  patternChar.writeValue((uint8_t *)"", 0);
-  needsLCDUpdate = true;
-}
-
-// ============================================================
-// HELPER: eraseCurrentInput
-//
-// Clears the current morse pattern AND the word buffer.
-// ============================================================
-void eraseCurrentInput() {
-  morsePattern[0] = '\0';
-  morseLen        = 0;
-  wordBuffer[0]   = '\0';
-  wordLen         = 0;
-  lastInputTime   = 0;
-  scrollOffset    = 0;
-  lastScrollTime  = 0;
-
-  patternChar.writeValue((uint8_t *)"",      0);
-  recognChar .writeValue((uint8_t *)"",      0);
-  wordChar   .writeValue((uint8_t *)"",      0);
-  statusChar .writeValue((uint8_t *)"ERASED", 6);
-
-  needsLCDUpdate = true;
-  Serial.println(F("[ERASE] Pattern and word cleared"));
-}
-
-// ============================================================
-// HELPER: getCharacterForMorse
-//
-// Searches the PROGMEM morse table for a matching pattern.
-// Returns the decoded character, or '\0' if not found.
-// ============================================================
-char getCharacterForMorse(const char *pattern) {
-  char buf[MAX_PATTERN_LEN];
-
-  for (int i = 0; i < MORSE_TABLE_SIZE; i++) {
-    /* Copy pattern from PROGMEM (no-op memcpy on ARM) */
-    memcpy_P(buf, MORSE_PATTERNS[i], MAX_PATTERN_LEN);
-    if (strcmp(pattern, buf) == 0) {
-      return (char)pgm_read_byte(&MORSE_CHARS[i]);
-    }
-  }
-  return '\0';
-}
-
-// ============================================================
-// HELPER: updateLCD
-//
-// Redraws both LCD lines from current state.
-//   Line 1 : Current morse pattern  (or BLE connection status)
-//   Line 2 : Word buffer            (static; scrolled in loop)
-// ============================================================
-void updateLCD() {
-  lcd.clear();
-
-  /* ── Line 1: morse pattern or status ── */
-  lcd.setCursor(0, 0);
-  if (morseLen > 0) {
-    int printLen = (morseLen < LCD_COLS) ? morseLen : LCD_COLS;
-    for (int i = 0; i < printLen; i++) {
-      lcd.print(morsePattern[i]);
-    }
-    /* Pad to full width */
-    for (int i = printLen; i < LCD_COLS; i++) {
-      lcd.print(' ');
-    }
-  } else {
-    /* No active pattern – show connection status */
-    if (bleConnected) {
-      lcd.print(F("BLE Connected "));
-    } else {
-      lcd.print(F("BLE Searching."));
-    }
-  }
-
-  /* ── Line 2: word buffer ── */
-  lcd.setCursor(0, 1);
-  if (wordLen == 0) {
-    for (int i = 0; i < LCD_COLS; i++) lcd.print(' ');
-  } else if (wordLen <= LCD_COLS) {
-    lcd.print(wordBuffer);
-    for (int i = wordLen; i < LCD_COLS; i++) lcd.print(' ');
-    scrollOffset = 0;
-  } else {
-    /* Show from current scrollOffset – the loop() refreshes this */
-    int end = scrollOffset + LCD_COLS;
-    if (end > wordLen) end = wordLen;
-    for (int i = scrollOffset; i < end; i++) {
-      lcd.print(wordBuffer[i]);
-    }
-    for (int i = end - scrollOffset; i < LCD_COLS; i++) {
-      lcd.print(' ');
-    }
-  }
-}
-
-// ============================================================
-// HELPER: flashRGB
-//
-// Lights the RGB LED in the requested colour for LED_FLASH_MS.
-// The LED is turned off non-blocking in the main loop.
-//   r, g, b : true = channel on, false = channel off
-// ============================================================
+// Flash RGB LED for LED_FLASH_MS; turned off non-blocking in loop().
 void flashRGB(bool r, bool g, bool b) {
-  /* Turn off first to ensure the flash is always visible */
-  digitalWrite(PIN_LED_R, LOW);
-  digitalWrite(PIN_LED_G, LOW);
-  digitalWrite(PIN_LED_B, LOW);
-
   digitalWrite(PIN_LED_R, r ? HIGH : LOW);
   digitalWrite(PIN_LED_G, g ? HIGH : LOW);
   digitalWrite(PIN_LED_B, b ? HIGH : LOW);
   ledOffTime = millis() + LED_FLASH_MS;
 }
 
-// ============================================================
-// HELPER: updateBLEPattern
-//
-// Pushes the current pattern string to the BLE characteristic.
-// ============================================================
-void updateBLEPattern() {
-  patternChar.writeValue((uint8_t *)morsePattern, (unsigned int)morseLen);
+// Print a string on the LCD padded/truncated to LCD_COLS.
+void lcdPrint(int row, const char *s) {
+  lcd.setCursor(0, row);
+  int n = strlen(s);
+  if (n > LCD_COLS) n = LCD_COLS;
+  for (int i = 0; i < n; i++)       lcd.print(s[i]);
+  for (int i = n; i < LCD_COLS; i++) lcd.print(' ');
 }
 
-// ============================================================
-// HELPER: sendViaBLE
-//
-// Transmits the complete word to the Raspberry Pi 3B central
-// device, shows feedback on the LCD, then resets the buffers.
-// ============================================================
-void sendViaBLE(const char *word) {
-  int len = (int)strlen(word);
+// Look up the character for a dot/dash pattern; '\0' if not found.
+char decodeMorse(const char *pattern) {
+  for (int i = 0; i < MORSE_SIZE; i++)
+    if (strcmp(pattern, MORSE[i].pat) == 0) return MORSE[i].ch;
+  return '\0';
+}
 
-  /* ── LCD: SENDING ── */
+// Redraw both LCD lines from current state.
+void updateLCD() {
   lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(F("SENDING...    "));
-  lcd.setCursor(0, 1);
-  /* Show up to 14 characters of the word */
-  int displayLen = (len < LCD_COLS) ? len : LCD_COLS;
-  for (int i = 0; i < displayLen; i++) lcd.print(word[i]);
-  for (int i = displayLen; i < LCD_COLS; i++) lcd.print(' ');
+  // Line 1: pattern being built, or BLE status when idle
+  if (morseLen > 0)  lcdPrint(0, morsePattern);
+  else               lcdPrint(0, bleConnected ? "BLE Connected " : "BLE Searching.");
+  // Line 2: word buffer (scrolling handled in loop)
+  if (wordLen == 0)         lcdPrint(1, "");
+  else if (wordLen <= LCD_COLS) lcdPrint(1, wordBuffer);
+  else {
+    char slice[LCD_COLS + 1];
+    strncpy(slice, wordBuffer + scrollOffset, LCD_COLS);
+    slice[LCD_COLS] = '\0';
+    lcdPrint(1, slice);
+  }
+}
 
-  statusChar.writeValue((uint8_t *)"SENDING", 7);
-
-  Serial.print(F("[SEND] Transmitting: "));
-  Serial.println(word);
-
-  /* Push the word to the BLE word characteristic */
-  wordChar.writeValue((uint8_t *)word, (unsigned int)len);
-
-  /* Allow the BLE stack time to process the notification */
-  delay(200);
-
-  /* ── LCD: SENT ── */
-  statusChar.writeValue((uint8_t *)"SENT", 4);
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(F("SENT          "));
-  lcd.setCursor(0, 1);
-  for (int i = 0; i < displayLen; i++) lcd.print(word[i]);
-  for (int i = displayLen; i < LCD_COLS; i++) lcd.print(' ');
-
-  Serial.println(F("[SEND] Transmission complete"));
-
-  /* Keep the SENT message visible briefly */
-  delay(1500);
-
-  /* ── Reset buffers ── */
-  wordBuffer[0]   = '\0';
-  wordLen         = 0;
-  morsePattern[0] = '\0';
-  morseLen        = 0;
-  scrollOffset    = 0;
-  lastInputTime   = 0;
-
+// Decode the current pattern and add the character to the word buffer.
+void finalizeCharacter() {
+  if (morseLen == 0) return;
+  char ch = decodeMorse(morsePattern);
+  if (ch) {
+    Serial.print(F("Decoded: ")); Serial.print(morsePattern);
+    Serial.print(F(" = ")); Serial.println(ch);
+    char s[2] = {ch, '\0'};
+    recognChar.writeValue((uint8_t *)s, 1);
+    if (wordLen < MAX_WORD) {     // NUL goes to wordBuffer[MAX_WORD], within the +1 allocation
+      wordBuffer[wordLen++] = ch;
+      wordBuffer[wordLen]   = '\0';
+      wordChar.writeValue((uint8_t *)wordBuffer, (unsigned int)wordLen);
+    }
+    flashRGB(false, true, false);   // green
+  } else {
+    Serial.print(F("Unknown pattern: ")); Serial.println(morsePattern);
+    statusChar.writeValue((uint8_t *)"UNKNOWN", 7);
+    lcdPrint(1, "? Unknown");
+    delay(600);
+    flashRGB(true, true, false);    // orange
+  }
+  morsePattern[0] = '\0'; morseLen = 0; lastInputTime = 0;
   patternChar.writeValue((uint8_t *)"", 0);
-  wordChar   .writeValue((uint8_t *)"", 0);
-  recognChar .writeValue((uint8_t *)"", 0);
-  statusChar .writeValue((uint8_t *)"READY", 5);
-
   needsLCDUpdate = true;
+}
+
+// Clear pattern and word buffer.
+void eraseAll() {
+  morsePattern[0] = '\0'; morseLen = 0;
+  wordBuffer[0]   = '\0'; wordLen  = 0;
+  lastInputTime = scrollOffset = 0; lastScrollTime = 0;
+  patternChar.writeValue((uint8_t *)"", 0);
+  recognChar .writeValue((uint8_t *)"", 0);
+  wordChar   .writeValue((uint8_t *)"", 0);
+  statusChar .writeValue((uint8_t *)"ERASED", 6);
+  needsLCDUpdate = true;
+  Serial.println(F("Erased"));
+}
+
+// Transmit word via BLE, show SENDING/SENT on LCD, then reset.
+void sendWord() {
+  if (wordLen == 0) { Serial.println(F("Nothing to send")); return; }
+  Serial.print(F("Sending: ")); Serial.println(wordBuffer);
+  statusChar.writeValue((uint8_t *)"SENDING", 7);
+  lcdPrint(0, "SENDING...");
+  lcdPrint(1, wordBuffer);
+  wordChar.writeValue((uint8_t *)wordBuffer, (unsigned int)wordLen);
+  delay(200);
+  statusChar.writeValue((uint8_t *)"SENT", 4);
+  lcdPrint(0, "SENT");
+  delay(1500);
+  eraseAll();
+  statusChar.writeValue((uint8_t *)"READY", 5);
+}
+
+// ── Setup ────────────────────────────────────────────────────
+void setup() {
+  Serial.begin(9600);
+  while (!Serial && millis() < 3000) {}
+  Serial.println(F("Morse Encoder starting"));
+
+  pinMode(PIN_DOT,   INPUT_PULLUP);
+  pinMode(PIN_DASH,  INPUT_PULLUP);
+  pinMode(PIN_ERASE, INPUT_PULLUP);
+  pinMode(PIN_SEND,  INPUT_PULLUP);
+  pinMode(PIN_LED_R, OUTPUT);
+  pinMode(PIN_LED_G, OUTPUT);
+  pinMode(PIN_LED_B, OUTPUT);
+
+  lcd.init(); lcd.backlight();
+  lcdPrint(0, "Morse Encoder");
+  lcdPrint(1, "BLE Starting..");
+
+  if (!BLE.begin()) {
+    Serial.println(F("BLE init failed"));
+    lcdPrint(0, "BLE INIT FAIL");
+    while (true) { flashRGB(true,false,false); delay(500); }
+  }
+
+  BLE.setLocalName("MorseEncoder");
+  BLE.setAdvertisedService(morseService);
+  morseService.addCharacteristic(patternChar);
+  morseService.addCharacteristic(recognChar);
+  morseService.addCharacteristic(wordChar);
+  morseService.addCharacteristic(statusChar);
+  BLE.addService(morseService);
+  patternChar.writeValue((uint8_t *)"", 0);
+  recognChar .writeValue((uint8_t *)"", 0);
+  wordChar   .writeValue((uint8_t *)"", 0);
+  statusChar .writeValue((uint8_t *)"READY", 5);
+  BLE.advertise();
+  Serial.println(F("BLE advertising as MorseEncoder"));
+
+  lcdPrint(0, "Ready  BLE OK");
+  lcdPrint(1, "Dot Dash Er Snd");
+  flashRGB(false, true, false);   // green = ready
+  delay(1500);
+  needsLCDUpdate = true;
+}
+
+// ── Loop ─────────────────────────────────────────────────────
+void loop() {
+  // BLE connection tracking
+  BLEDevice central = BLE.central();
+  if (central && !bleConnected) {
+    bleConnected = true;
+    Serial.print(F("BLE connected: ")); Serial.println(central.address());
+    statusChar.writeValue((uint8_t *)"CONNECTED", 9);
+    needsLCDUpdate = true;
+  } else if (!central && bleConnected) {
+    bleConnected = false;
+    Serial.println(F("BLE disconnected"));
+    statusChar.writeValue((uint8_t *)"DISCONNECTED", 12);
+    needsLCDUpdate = true;
+  }
+
+  // Turn LED off after flash duration
+  if (ledOffTime && millis() >= ledOffTime) {
+    digitalWrite(PIN_LED_R, LOW);
+    digitalWrite(PIN_LED_G, LOW);
+    digitalWrite(PIN_LED_B, LOW);
+    ledOffTime = 0;
+  }
+
+  // DOT → white flash
+  if (pressed(PIN_DOT, btnDot)) {
+    Serial.println(F("DOT"));
+    if (morseLen < MAX_PATTERN - 1) {
+      morsePattern[morseLen++] = '.';
+      morsePattern[morseLen]   = '\0';
+      lastInputTime = millis();
+      patternChar.writeValue((uint8_t *)morsePattern, (unsigned int)morseLen);
+      needsLCDUpdate = true;
+    }
+    flashRGB(true, true, true);
+  }
+
+  // DASH → cyan flash
+  if (pressed(PIN_DASH, btnDash)) {
+    Serial.println(F("DASH"));
+    if (morseLen < MAX_PATTERN - 1) {
+      morsePattern[morseLen++] = '-';
+      morsePattern[morseLen]   = '\0';
+      lastInputTime = millis();
+      patternChar.writeValue((uint8_t *)morsePattern, (unsigned int)morseLen);
+      needsLCDUpdate = true;
+    }
+    flashRGB(false, true, true);
+  }
+
+  // ERASE → red flash
+  if (pressed(PIN_ERASE, btnErase)) {
+    Serial.println(F("ERASE"));
+    eraseAll();
+    flashRGB(true, false, false);
+  }
+
+  // SEND → finalise current pattern, then transmit, blue flash
+  if (pressed(PIN_SEND, btnSend)) {
+    Serial.println(F("SEND"));
+    if (morseLen > 0) finalizeCharacter();
+    sendWord();
+    flashRGB(false, false, true);
+  }
+
+  // Auto-finalise after CHAR_TIMEOUT_MS of inactivity
+  if (morseLen > 0 && lastInputTime && millis() - lastInputTime >= CHAR_TIMEOUT_MS)
+    finalizeCharacter();
+
+  // Redraw LCD when state changed
+  if (needsLCDUpdate) { updateLCD(); needsLCDUpdate = false; }
+
+  // Scroll long words on line 2
+  if (wordLen > LCD_COLS && millis() - lastScrollTime >= LCD_SCROLL_MS) {
+    lastScrollTime = millis();
+    if (++scrollOffset > wordLen - LCD_COLS) scrollOffset = 0;
+    char slice[LCD_COLS + 1];
+    strncpy(slice, wordBuffer + scrollOffset, LCD_COLS);
+    slice[LCD_COLS] = '\0';
+    lcdPrint(1, slice);
+  }
 }
