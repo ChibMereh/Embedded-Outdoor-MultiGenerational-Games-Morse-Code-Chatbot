@@ -258,7 +258,7 @@ void startMorsePlay() {
   mpPatPos        = 0;
   mpCurrentPat[0] = '\0';
   mpPlaying       = true;
-  mpState         = MP_CHAR_GAP;          // brief initial pause before first symbol
+  mpState         = MP_CHAR_GAP;          // inter-character gap before first symbol (3 units = MP_CHAR_MS)
   mpEventTime     = millis() + MP_CHAR_MS;
   showingAIResponse = false;              // text revealed only after playback
   Serial.println(F("Morse playback started"));
@@ -299,8 +299,7 @@ void tickMorsePlay() {
       break;
 
     case MP_CHAR_GAP:
-    case MP_WORD_GAP:
-    default: {
+    case MP_WORD_GAP: {
       // Gap done – load next character from aiResponse
       digitalWrite(PIN_LED_R, LOW);
       digitalWrite(PIN_LED_G, LOW);
@@ -337,6 +336,12 @@ void tickMorsePlay() {
       Serial.println(F("Morse playback complete"));
       break;
     }
+
+    default:
+      // Unexpected state – stop playback safely
+      mpPlaying = false;
+      mpState   = MP_IDLE;
+      break;
   }
 }
 
