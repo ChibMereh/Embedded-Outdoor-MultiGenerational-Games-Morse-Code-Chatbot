@@ -128,19 +128,19 @@ class MorseCodeChatbot:
         
         if word:
             is_valid = self.validator.validate_word(word)
-            status = "✓ VALID" if is_valid else "✗ INVALID"
+            status = "✓ AUTHENTICATED" if is_valid else "✗ CORRUPTED"
             
             if ENABLE_DISPLAY:
-                print(f"\n>>> WORD: {word} {status}\n", flush=True)
+                print(f"\n  INTERCEPT: {word}  {status}\n", flush=True)
             
             logger.info(f"Word decoded: {word} - {status}")
             
             if not is_valid:
                 suggestions = self.validator.get_suggestions(word)
                 if suggestions:
-                    logger.info(f"Did you mean: {', '.join(suggestions)}")
+                    logger.info(f"Closest match: {', '.join(suggestions)}")
                     if ENABLE_DISPLAY:
-                        print(f"Did you mean: {', '.join(suggestions)}\n")
+                        print(f"  Closest match: {', '.join(suggestions)}\n")
             
             self.decoded_words.append(word)
     
@@ -160,7 +160,7 @@ class MorseCodeChatbot:
             return
 
         if ENABLE_DISPLAY:
-            print(f"BLE word received: '{word}'", flush=True)
+            print(f"  TRANSMISSION RECEIVED: '{word}'", flush=True)
         logger.info(f"BLE word received: '{word}'")
 
         if word == _SEND_SENTINEL:
@@ -169,15 +169,15 @@ class MorseCodeChatbot:
             return
 
         is_valid = self.validator.validate_word(word)
-        status = "✓ VALID" if is_valid else "✗ INVALID"
+        status = "✓ AUTHENTICATED" if is_valid else "✗ CORRUPTED"
         if ENABLE_DISPLAY:
-            print(f">>> WORD: {word} {status}", flush=True)
+            print(f"  INTERCEPT: {word}  {status}", flush=True)
         logger.info(f"Word: {word} - {status}")
 
         if not is_valid:
             suggestions = self.validator.get_suggestions(word)
             if suggestions and ENABLE_DISPLAY:
-                print(f"Did you mean: {', '.join(suggestions)}")
+                print(f"  Closest match: {', '.join(suggestions)}")
 
         with self._timeout_lock:
             self.decoded_words.append(word)
@@ -219,7 +219,7 @@ class MorseCodeChatbot:
         
         if ENABLE_DISPLAY:
             print(f"\n{'='*60}")
-            print(f"RECEIVED MESSAGE: {full_message}")
+            print(f"  DECODED TRANSMISSION: {full_message}")
             print(f"{'='*60}")
         
         logger.info(f"Full message received: {full_message}")
@@ -247,7 +247,7 @@ class MorseCodeChatbot:
         
         try:
             if ENABLE_DISPLAY:
-                print("Sending to OpenAI...", flush=True)
+                print("  Relaying to HQ…", flush=True)
             
             chat_response = openai_client.chat.completions.create(
                 model=OPENAI_MODEL,
@@ -262,7 +262,7 @@ class MorseCodeChatbot:
             ai_response = chat_response.choices[0].message.content.strip()
             
             if ENABLE_DISPLAY:
-                print(f"AI Response: {ai_response}\n")
+                print(f"  HQ RESPONSE: {ai_response}\n")
             
             logger.info(f"OpenAI response: {ai_response}")
             return ai_response
@@ -270,7 +270,7 @@ class MorseCodeChatbot:
         except Exception as e:
             logger.error(f"OpenAI API error: {e}")
             if ENABLE_DISPLAY:
-                print(f"OpenAI error: {e}\n")
+                print(f"  RELAY ERROR — HQ unreachable: {e}\n")
             return None
     
     # ── Response delivery ────────────────────────────────────────────────
@@ -293,7 +293,7 @@ class MorseCodeChatbot:
             if hasattr(self.input_handler, "send_response"):
                 if ENABLE_DISPLAY:
                     preview = response_text[:80]
-                    print(f"Sending BLE response: {preview}"
+                    print(f"  Transmitting HQ response via BLE: {preview}"
                           f"{'...' if len(response_text) > 80 else ''}\n")
                 self.input_handler.send_response(response_text)
             else:
@@ -310,7 +310,7 @@ class MorseCodeChatbot:
                 encoded = response_text
             
             if ENABLE_DISPLAY:
-                print(f"Sending response via Bluetooth ({BT_RESPONSE_ENCODING}): "
+                print(f"  Transmitting response via Bluetooth ({BT_RESPONSE_ENCODING}): "
                       f"{encoded[:80]}{'...' if len(encoded) > 80 else ''}\n")
             
             self.input_handler.send(encoded)

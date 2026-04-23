@@ -28,7 +28,7 @@ class WordValidator:
             self.dictionary = self._get_fallback_dictionary()
     
     def _get_fallback_dictionary(self):
-        """Fallback dictionary with common words"""
+        """Fallback dictionary with common words and spy/radio jargon"""
         words = [
             "HELLO", "WORLD", "MORSE", "CODE", "RADIO", "SIGNAL",
             "COMMUNICATION", "MESSAGE", "PYTHON", "RASPBERRY", "PI",
@@ -46,6 +46,17 @@ class WordValidator:
             "OVER", "SUCH", "WELL", "ALSO", "THEN", "THAN",
             "INTO", "SOME", "COULD", "THEM", "OTHER", "THESE",
             "THEIR", "THERE", "ABOUT", "WOULD", "WHICH",
+            # ── Spy / radio-operator jargon ─────────────────────────
+            "COPY", "AFFIRM", "NEGATIVE", "ROGER", "WILCO", "OVER",
+            "OUT", "STANDBY", "ABORT", "PROCEED", "CONFIRMED",
+            "RAVEN", "AGENT", "HANDLER", "CONTACT", "ASSET",
+            "INTEL", "MISSION", "OBJECTIVE", "TARGET", "EXTRACT",
+            "SECURE", "CHANNEL", "ENCRYPTED", "CIPHER", "DECODE",
+            "COVER", "BREACH", "EXFIL", "INFILTRATE", "SURVEILLANCE",
+            "NIGHTFALL", "FOXHOUND", "BLACKOUT", "DEADROP", "SAFEHOUSE",
+            "SHADOW", "GHOST", "PHANTOM", "OPERATOR", "FIELD",
+            "STATUS", "REPORT", "RENDEZVOUS", "RALLY", "EVADE",
+            "COMPROMISED", "BURN", "CLEAN", "HOT", "COLD",
         ]
         return set(words)
     
