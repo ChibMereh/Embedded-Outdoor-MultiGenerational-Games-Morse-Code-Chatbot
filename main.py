@@ -23,6 +23,7 @@ from config import (
     BLE_DEVICE_NAME,
     BLE_SCAN_TIMEOUT,
     MESSAGE_TIMEOUT_S,
+    PERSONA_NAME,
     SCENARIO_PROMPT,
 )
 from morse_decoder import MorseDecoder
@@ -350,19 +351,21 @@ class MorseCodeChatbot:
             
             if ENABLE_DISPLAY:
                 print("=" * 60)
-                print("Morse Code Decoder - Chatbot")
+                print(f"  *** SECURE CHANNEL OPEN — {PERSONA_NAME} ***")
+                print("  Cold War Field Radio  |  Morse Code Decoder")
+                print("=" * 60)
                 mode = "BLE" if USE_BLE else INPUT_METHOD
-                print(f"Input method: {mode}")
-                print(f"OpenAI: {'enabled' if openai_client else 'disabled (no API key)'}")
-                print(f"Bluetooth response: {'enabled' if ENABLE_BT_RESPONSE else 'disabled'}")
+                print(f"  Input method : {mode}")
+                print(f"  AI backbone  : {'enabled' if openai_client else 'disabled (no API key)'}")
+                print(f"  BT response  : {'enabled' if ENABLE_BT_RESPONSE else 'disabled'}")
                 if USE_BLE:
-                    print(f"Scenario: {SCENARIO_PROMPT[:60]}…")
+                    print(f"  Mission brief: {SCENARIO_PROMPT[:55]}…")
                 print("=" * 60)
                 if USE_BLE:
-                    print(f"Scanning for '{BLE_DEVICE_NAME}'…")
+                    print(f"  Scanning for '{BLE_DEVICE_NAME}'…")
                 else:
-                    print("Waiting for morse code input from Arduino…")
-                print("(Use Ctrl+C to exit)")
+                    print("  Awaiting transmission from field agent…")
+                print("  (CTRL+C to abort mission)")
                 print("=" * 60)
             
             logger.info("Application started, waiting for input")
@@ -388,7 +391,7 @@ class MorseCodeChatbot:
             self.input_handler.cleanup()
         
         if ENABLE_DISPLAY:
-            print("\nApplication closed")
+            print(f"\n  *** CHANNEL CLOSED — {PERSONA_NAME} OUT ***")
         
         logger.info("Application terminated")
 

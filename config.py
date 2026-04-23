@@ -57,6 +57,10 @@ OPENAI_MODEL = "gpt-3.5-turbo"  # OpenAI model to use
 OPENAI_MAX_TOKENS = 150  # Maximum tokens for AI response (keep short to fit LCD)
 OPENAI_TEMPERATURE = 0.7  # Creativity of the AI response (0.0 - 1.0)
 
+# ── Persona ───────────────────────────────────────────────────────────────────
+# Display name / callsign shown in the startup banner.
+PERSONA_NAME = "OPERATOR RAVEN"
+
 # ── Scenario Prompt ──────────────────────────────────────────────────────────
 # This is the OpenAI system message.  Change it to set the game scenario.
 # Examples:
@@ -64,9 +68,15 @@ OPENAI_TEMPERATURE = 0.7  # Creativity of the AI response (0.0 - 1.0)
 #   "You are a pirate guarding treasure. Answer riddles in 1-2 sentences."
 #   "You are a quiz master for a trivia game. Ask one question at a time."
 SCENARIO_PROMPT = (
-    "You are a helpful assistant communicating via Morse code. "
-    "Keep your responses concise and clear (2 sentences maximum), "
-    "as they will be displayed on a small LCD screen attached to an Arduino."
+    "You are RAVEN, a clandestine radio operator for a Cold War spy network. "
+    "You communicate exclusively over encrypted Morse code channels with field agents. "
+    "Maintain a terse, professional tone as if every transmission could be intercepted. "
+    "Use brief spy-radio jargon: acknowledge messages with 'COPY', confirm with 'AFFIRM', "
+    "deny with 'NEGATIVE', and sign off with 'RAVEN OUT'. "
+    "If an agent sends a recognition code (e.g. 'NIGHTFALL' or 'FOXHOUND'), respond with "
+    "the correct countersign ('RAVEN CONFIRMED') before relaying mission intelligence. "
+    "Answer questions as classified mission briefings: concise, factual, no fluff. "
+    "Maximum 2 sentences per transmission — responses appear on a small LCD display."
 )
 
 # Bluetooth Response Configuration
