@@ -111,6 +111,7 @@ int           morseLen    = 0;                 // How many symbols are in morseP
 char          wordBuffer[MAX_WORD + 1]  = "";  // The letters decoded so far (e.g. "HELLO")
 int           wordLen     = 0;                 // How many letters are in wordBuffer
 unsigned long lastInputTime  = 0;              // When the last button was pressed (in ms since power on)
+bool          inputOccurred  = false;          // True once the first button press has happened (avoids millis()==0 edge case)
 bool          bleConnected   = false;          // Is the Bluetooth connection active?
 char          aiResponse[MAX_RESPONSE_BYTES + 2] = "";  // The AI reply text (stored when it arrives)
 int           aiResponseLen  = 0;              // How long the AI reply is
@@ -128,6 +129,9 @@ bool dotLastRaw   = HIGH;  unsigned long dotEdgeTime   = 0;  bool dotHeld   = fa
 bool dashLastRaw  = HIGH;  unsigned long dashEdgeTime  = 0;  bool dashHeld  = false;  // DASH button state
 bool eraseLastRaw = HIGH;  unsigned long eraseEdgeTime = 0;  bool eraseHeld = false;  // ERASE button state
 bool sendLastRaw  = HIGH;  unsigned long sendEdgeTime  = 0;  bool sendHeld  = false;  // SEND button state
+
+// --- Forward declarations ---
+void updateLCD();  // Declared here because finalizeCharacter() (line ~236) calls updateLCD() which is defined later in the file
 
 // --- Helper functions ---
 
@@ -191,7 +195,11 @@ char decodeMorse(const char *pattern) {
   return '\0';                                       // Pattern not found - return empty
 }
 
-// Play a text string as Morse code flashes on the LEDs (this pauses everything while playing)
+// Play a text string as Morse code flashes on the LEDs.
+// NOTE: This function uses blocking delays - the Arduino cannot respond to button presses or
+// BLE events while it runs. For short messages this is a few seconds; for long AI responses
+// it can be 30+ seconds. This is an intentional simplification; the device appears unresponsive
+// during playback, which is acceptable because the user's job is to listen and decode.
 // Green LED = dot (short flash), Red LED = dash (long flash)
 void playMorse(const char *text) {
   lcdPrint(1, "Listen!       ");                      // Show a message on the LCD bottom row
@@ -221,6 +229,7 @@ void playMorse(const char *text) {
     }
     // If the character wasn't found in the Morse table, it is simply skipped
   }
+  lcdPrint(1, "              ");                      // Clear the "Listen!" message when playback ends
 }
 
 // Decode the current Morse pattern into a letter and add it to the word
@@ -256,7 +265,7 @@ void finalizeCharacter() {
 void eraseAll() {
   morsePattern[0] = '\0'; morseLen = 0;                             // Clear the pattern
   wordBuffer[0]   = '\0'; wordLen  = 0;                             // Clear the word
-  lastInputTime = 0;                                                // Reset inactivity timer
+  lastInputTime = 0;      inputOccurred = false;                    // Reset inactivity timer and input flag
   scrollOffset  = 0;     lastScrollTime   = 0;                     // Reset word scroll position
   aiScrollOffset = 0;    lastAIScrollTime = 0;                      // Reset AI reply scroll position
   showingAIResponse = false;                                        // Hide any AI reply currently showing
@@ -411,6 +420,7 @@ void loop() {
       morsePattern[morseLen++] = '.';                   // Append a dot to the pattern
       morsePattern[morseLen]   = '\0';                  // Add end-of-string marker
       lastInputTime = millis();                         // Record the time of this input
+      inputOccurred = true;                             // Mark that at least one input has happened
       patternChar.writeValue((uint8_t *)morsePattern, (unsigned int)morseLen);  // Send over BLE
       lcdPrint(0, morsePattern);                        // Show updated pattern on LCD
     }
@@ -424,6 +434,7 @@ void loop() {
       morsePattern[morseLen++] = '-';                   // Append a dash to the pattern
       morsePattern[morseLen]   = '\0';                  // Add end-of-string marker
       lastInputTime = millis();                         // Record the time of this input
+      inputOccurred = true;                             // Mark that at least one input has happened
       patternChar.writeValue((uint8_t *)morsePattern, (unsigned int)morseLen);  // Send over BLE
       lcdPrint(0, morsePattern);                        // Show updated pattern on LCD
     }
@@ -446,14 +457,14 @@ void loop() {
   }
 
   // Auto-decode: if the user has entered a pattern and stopped for 800ms, decode it automatically
-  if (morseLen > 0 && lastInputTime > 0 && millis() - lastInputTime >= CHAR_TIMEOUT_MS) {
+  if (morseLen > 0 && inputOccurred && millis() - lastInputTime >= CHAR_TIMEOUT_MS) {
     finalizeCharacter();                                // Decode the pattern into a letter
   }
 
   // Scroll long words on the top row of the LCD (only runs when word is wider than the screen)
   if (wordLen > LCD_COLS && millis() - lastScrollTime >= LCD_SCROLL_MS) {
     lastScrollTime = millis();                          // Record the scroll time
-    if (++scrollOffset > wordLen - LCD_COLS) scrollOffset = 0;  // Advance scroll, wrap around at end
+    if (++scrollOffset > wordLen - LCD_COLS) scrollOffset = 0;  // Advance scroll, wrap around after showing all characters
     char slice[LCD_COLS + 1];                           // Temporary buffer for the visible portion
     strncpy(slice, wordBuffer + scrollOffset, LCD_COLS); // Copy the visible section of the word
     slice[LCD_COLS] = '\0';                             // Add end-of-string marker
@@ -464,7 +475,7 @@ void loop() {
   if (showingAIResponse && aiResponseLen > LCD_COLS &&
       millis() - lastAIScrollTime >= LCD_SCROLL_MS) {
     lastAIScrollTime = millis();                        // Record the scroll time
-    if (++aiScrollOffset > aiResponseLen - LCD_COLS) aiScrollOffset = 0;  // Advance scroll, wrap around
+    if (++aiScrollOffset > aiResponseLen - LCD_COLS) aiScrollOffset = 0;  // Advance scroll, wrap around after showing all characters
     char slice[LCD_COLS + 1];                           // Temporary buffer for the visible portion
     strncpy(slice, aiResponse + aiScrollOffset, LCD_COLS);  // Copy the visible section of the reply
     slice[LCD_COLS] = '\0';                             // Add end-of-string marker
@@ -483,7 +494,7 @@ void loop() {
     showingAIResponse = false;                                     // Hide text until Morse playback is done
     Serial.print(F("AI response received: ")); Serial.println(aiResponse);  // Print to Serial Monitor
     flashYellow();                                                 // Flash YELLOW LED to show reply arrived
-    playMorse(aiResponse);                                         // Play the reply as Morse code on the LEDs
+    playMorse(aiResponse);                                         // Play the reply as Morse code (blocking - device unresponsive until done)
     showingAIResponse = true;                                      // Now reveal the text on the LCD
     updateLCD();                                                   // Refresh the LCD to show the reply
   }
