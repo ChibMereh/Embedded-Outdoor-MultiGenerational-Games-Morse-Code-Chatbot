@@ -10,13 +10,21 @@
  *   Pin 6 - GREEN LED     (with 220 ohm resistor to GND) - flashes for DOT
  *   Pin 7 - RED LED       (with 220 ohm resistor to GND) - flashes for DASH
  *   Pin 8 - YELLOW LED    (with 220 ohm resistor to GND) - flashes for SEND and ERASE
- *   I2C LCD 14x2, address 0x27 (try 0x3F if screen stays blank)
- *     SDA pin on LCD -> SDA pin on Nano
- *     SCL pin on LCD -> SCL pin on Nano
+ *   Standard HD44780 LCD 14x2 (parallel 4-bit mode, no I2C backpack needed)
+ *     Pin A0 (RS) -> RS  pin on LCD
+ *     Pin A1 (EN) -> EN  pin on LCD
+ *     Pin A2 (D4) -> D4  pin on LCD
+ *     Pin A3 (D5) -> D5  pin on LCD
+ *     Pin A4 (D6) -> D6  pin on LCD
+ *     Pin A5 (D7) -> D7  pin on LCD
+ *     5V          -> VDD pin on LCD
+ *     GND         -> VSS pin on LCD
+ *     Potentiometer (wiper to V0) or 10 kΩ resistor to GND for contrast
+ *     220 Ω resistor + 5V -> A (backlight anode); K (backlight cathode) -> GND
  *
  * LIBRARIES NEEDED (install via Arduino Library Manager)
  *   ArduinoBLE
- *   LiquidCrystal I2C
+ *   LiquidCrystal (built into the Arduino IDE)
  *
  * HOW IT WORKS
  *   1. Press DOT or DASH - the symbol appears on the LCD screen
@@ -39,7 +47,7 @@
 
 // Include the libraries we need
 #include <ArduinoBLE.h>          // For Bluetooth Low Energy communication
-#include <LiquidCrystal_I2C.h>  // For the I2C LCD screen
+#include <LiquidCrystal.h>       // For the parallel HD44780 LCD screen
 
 // --- Pin numbers ---
 // These tell the Arduino which pin each button and the LED are on
@@ -50,6 +58,14 @@ const int PIN_SEND       = 5;  // SEND button connected to pin 5
 const int PIN_LED_GREEN  = 6;  // Green LED - flashes for DOT and successful decode (with 220 ohm resistor to GND)
 const int PIN_LED_RED    = 7;  // Red LED   - flashes for DASH and unknown patterns  (with 220 ohm resistor to GND)
 const int PIN_LED_YELLOW = 8;  // Yellow LED - flashes for SEND and ERASE            (with 220 ohm resistor to GND)
+
+// --- Parallel LCD pin numbers ---
+const int PIN_LCD_RS = A0;  // LCD Register Select pin
+const int PIN_LCD_EN = A1;  // LCD Enable pin
+const int PIN_LCD_D4 = A2;  // LCD data pin 4
+const int PIN_LCD_D5 = A3;  // LCD data pin 5
+const int PIN_LCD_D6 = A4;  // LCD data pin 6
+const int PIN_LCD_D7 = A5;  // LCD data pin 7
 
 // --- Timing values (all in milliseconds) ---
 const unsigned long DEBOUNCE_MS     = 50;   // Wait 50ms for button to stop bouncing
@@ -103,7 +119,7 @@ BLECharacteristic statusChar  ("12345678-1234-5678-1234-56789abcdef4", BLERead|B
 BLECharacteristic responseChar("12345678-1234-5678-1234-56789abcdef5", BLEWrite, MAX_RESPONSE_BYTES + 1);  // Channel to receive AI reply from Pi
 
 // --- LCD object ---
-LiquidCrystal_I2C lcd(0x27, LCD_COLS, LCD_ROWS);  // Create LCD object at I2C address 0x27
+LiquidCrystal lcd(PIN_LCD_RS, PIN_LCD_EN, PIN_LCD_D4, PIN_LCD_D5, PIN_LCD_D6, PIN_LCD_D7);  // Create LCD object using parallel 4-bit mode
 
 // --- Variables to remember current state ---
 char          morsePattern[MAX_PATTERN] = "";  // The dots and dashes typed so far (e.g. ".-")
@@ -352,8 +368,7 @@ void setup() {
   digitalWrite(PIN_LED_YELLOW, LOW); // Make sure yellow LED starts off
 
   // Start the LCD screen
-  lcd.init();                        // Initialise the LCD
-  lcd.backlight();                   // Turn the LCD backlight on
+  lcd.begin(LCD_COLS, LCD_ROWS);     // Initialise the LCD with its column and row count
   lcdPrint(0, "Morse Encoder ");    // Show welcome text on top row
   lcdPrint(1, "BLE Starting..");    // Show status on bottom row
 
