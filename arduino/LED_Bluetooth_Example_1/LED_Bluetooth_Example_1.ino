@@ -11,12 +11,12 @@
  *   Pin 7 - RED LED       (with 220 ohm resistor to GND) - flashes for DASH
  *   Pin 8 - YELLOW LED    (with 220 ohm resistor to GND) - flashes for SEND and ERASE
  *   Standard HD44780 LCD 14x2 (parallel 4-bit mode, no I2C backpack needed)
- *     Pin  9 (RS) -> RS  pin on LCD
- *     Pin 10 (EN) -> EN  pin on LCD
- *     Pin 11 (D4) -> D4  pin on LCD
- *     Pin 12 (D5) -> D5  pin on LCD
- *     Pin A0 (D6) -> D6  pin on LCD
- *     Pin A1 (D7) -> D7  pin on LCD
+ *     Pin A0 (RS) -> RS  pin on LCD
+ *     Pin A1 (EN) -> EN  pin on LCD
+ *     Pin A2 (D4) -> D4  pin on LCD
+ *     Pin A3 (D5) -> D5  pin on LCD
+ *     Pin A4 (D6) -> D6  pin on LCD
+ *     Pin A5 (D7) -> D7  pin on LCD
  *     5V          -> VDD pin on LCD
  *     GND         -> VSS pin on LCD
  *     Potentiometer (wiper to V0) or 10 kΩ resistor to GND for contrast
@@ -60,12 +60,12 @@ const int PIN_LED_RED    = 7;  // Red LED   - flashes for DASH and unknown patte
 const int PIN_LED_YELLOW = 8;  // Yellow LED - flashes for SEND and ERASE            (with 220 ohm resistor to GND)
 
 // --- Parallel LCD pin numbers ---
-const int PIN_LCD_RS = 9;   // LCD Register Select pin
-const int PIN_LCD_EN = 10;  // LCD Enable pin
-const int PIN_LCD_D4 = 11;  // LCD data pin 4
-const int PIN_LCD_D5 = 12;  // LCD data pin 5
-const int PIN_LCD_D6 = A0;  // LCD data pin 6
-const int PIN_LCD_D7 = A1;  // LCD data pin 7
+const int PIN_LCD_RS = A0;  // LCD Register Select pin
+const int PIN_LCD_EN = A1;  // LCD Enable pin
+const int PIN_LCD_D4 = A2;  // LCD data pin 4
+const int PIN_LCD_D5 = A3;  // LCD data pin 5
+const int PIN_LCD_D6 = A4;  // LCD data pin 6
+const int PIN_LCD_D7 = A5;  // LCD data pin 7
 
 // --- Timing values (all in milliseconds) ---
 const unsigned long DEBOUNCE_MS     = 50;   // Wait 50ms for button to stop bouncing
