@@ -47,6 +47,7 @@
 // Include the libraries we need
 #include <ArduinoBLE.h>          // For Bluetooth Low Energy communication
 #include <LiquidCrystal.h>       // For the parallel HD44780 LCD screen
+#include <stdio.h>               // For snprintf used in debug log formatting
 
 // --- Pin numbers ---
 // These tell the Arduino which pin each input and LED are on
@@ -441,9 +442,10 @@ void loop() {
       keyerHeld = false;
       unsigned long pressMs = millis() - keyerPressStart;
       char symbol = (pressMs <= KEYER_DOT_MAX_MS) ? '.' : '-';  // short=dot, long=dash
-      Serial.print(F("[KEY] "));
-      Serial.print((symbol == '.') ? F("DOT ") : F("DASH "));
-      Serial.println(pressMs);
+      const char *symbolName = (symbol == '.') ? "DOT" : "DASH";
+      char keyLog[24];
+      snprintf(keyLog, sizeof(keyLog), "[KEY] %s %lu", symbolName, pressMs);
+      Serial.println(keyLog);
       if (morseLen < MAX_PATTERN - 1) {                 // Only add if pattern isn't full
         morsePattern[morseLen++] = symbol;
         morsePattern[morseLen]   = '\0';
@@ -452,7 +454,11 @@ void loop() {
         patternChar.writeValue((uint8_t *)morsePattern, (unsigned int)morseLen);
         lcdPrint(0, morsePattern);
       }
-      if (symbol == '.') flashGreen(); else flashRed();
+      if (symbol == '.') {
+        flashGreen();
+      } else {
+        flashRed();
+      }
     }
   }
 
