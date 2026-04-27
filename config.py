@@ -54,7 +54,7 @@ MAX_WORD_LENGTH = 20    # words longer than this many letters are rejected as in
 # OpenAI Configuration
 OPENAI_API_KEY = ""     # paste your OpenAI API key here, or leave blank and set the OPENAI_API_KEY environment variable
 OPENAI_MODEL = "gpt-3.5-turbo"      # the OpenAI chat model to use (gpt-3.5-turbo is fast and affordable)
-OPENAI_MAX_TOKENS = 150             # maximum length of the AI's reply in tokens (keep short to fit the LCD)
+OPENAI_MAX_TOKENS = 240             # maximum length of the AI's reply in tokens (longer replies while still LCD-scrollable)
 OPENAI_TEMPERATURE = 0.7            # how creative the AI reply is: 0.0 = very predictable, 1.0 = very random
 
 # ── Scenario Prompt ──────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ OPENAI_TEMPERATURE = 0.7            # how creative the AI reply is: 0.0 = very p
 #   "You are a quiz master for a trivia game. Ask one question at a time."
 SCENARIO_PROMPT = (
     "You are a helpful assistant communicating via Morse code. "    # define the AI's role
-    "Keep your responses concise and clear (2 sentences maximum), " # keep replies short for the LCD
+    "Keep your responses concise and clear (up to 4 short sentences), " # keep replies readable on the LCD
     "as they will be displayed on a small LCD screen attached to an Arduino."  # explain why brevity matters
 )
 

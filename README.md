@@ -12,7 +12,7 @@ small LCD screen.
 ┌─────────────────────────────────┐        BLE GATT        ┌────────────────────┐
 │   Arduino Nano 33 BLE           │ ◄─────────────────────► │  Raspberry Pi 3B   │
 │                                 │                          │                    │
-│  Buttons → DOT / DASH / SEND    │  wordChar (Notify) ───► │  ble_handler.py    │
+│  Keyer + ERASE/SEND buttons     │  wordChar (Notify) ───► │  ble_handler.py    │
 │  LCD 14×2 displays:             │                          │  morse_decoder.py  │
 │    • current Morse pattern      │ ◄─── responseChar (Write)│  OpenAI API        │
 │    • word being built           │                          │  main.py           │
@@ -22,7 +22,7 @@ small LCD screen.
 
 **Data flow:**
 
-1. User presses DOT / DASH buttons on the Arduino to build a Morse pattern.
+1. User taps/holds a Morse keyer on the Arduino to build a Morse pattern.
 2. After 800 ms of inactivity the character is decoded and added to the word
    buffer on the LCD.
 3. User presses **SEND** → the word is transmitted to the Pi via a BLE
@@ -43,8 +43,7 @@ small LCD screen.
 |-----------|-------|
 | Arduino Nano 33 BLE | Runs the sketch in `arduino/LED_Bluetooth_Example_1/` |
 | I²C LCD 14×2 (address `0x27`) | SDA → Nano SDA, SCL → Nano SCL |
-| DOT button | Pin 2 → GND, INPUT_PULLUP |
-| DASH button | Pin 3 → GND, INPUT_PULLUP |
+| Morse keyer input | Pin 2 → GND, INPUT_PULLUP (short press=dot, long press=dash) |
 | ERASE button | Pin 4 → GND, INPUT_PULLUP |
 | SEND button | Pin 5 → GND, INPUT_PULLUP |
 | RGB LED | R=6, G=7, B=8 (220 Ω to GND each) |
