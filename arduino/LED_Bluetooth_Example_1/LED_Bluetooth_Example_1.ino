@@ -3,7 +3,8 @@
  * Morse Code Encoder - Simple Version for Arduino Nano 33 BLE
  *
  * HARDWARE (all pins changeable below)
- *   Pin 2 - MORSE KEYER input (connect between pin and GND, uses INPUT_PULLUP)
+ *   Pin 2 - DIT paddle  (TRRS Tip   → D2, TRRS Sleeve → GND) — short press always = DOT
+ *   Pin 3 - DAH paddle  (TRRS Ring1 → D3, TRRS Sleeve → GND) — press always = DASH
  *   Pin 4 - ERASE button      (connect between pin and GND, uses INPUT_PULLUP)
  *   Pin 5 - SEND button       (connect between pin and GND, uses INPUT_PULLUP)
  *   Pin 6 - GREEN LED     (with 220 ohm resistor to GND) - flashes for dot (short press)
@@ -25,8 +26,14 @@
  *   ArduinoBLE
  *   LiquidCrystal (built into the Arduino IDE)
  *
+ * TRRS WIRING (3.5mm 4-pole jack)
+ *   Tip   -> Arduino D2 (dit / dot paddle)
+ *   Ring1 -> Arduino D3 (dah / dash paddle)
+ *   Ring2 -> not connected
+ *   Sleeve-> Arduino GND
+ *
  * HOW IT WORKS
- *   1. Tap/hold the keyer - short press = DOT, long press = DASH
+ *   1. Press DIT paddle (Tip) = DOT; press DAH paddle (Ring1) = DASH
  *   2. After 800ms of no input, the pattern is decoded into a letter
  *      - GREEN LED flashes for a good decode, RED for unknown pattern
  *   3. Press SEND to transmit the word via Bluetooth to the computer
@@ -51,7 +58,8 @@
 
 // --- Pin numbers ---
 // These tell the Arduino which pin each input and LED are on
-const int PIN_KEYER      = 2;  // Morse keyer input connected to pin 2
+const int PIN_KEYER      = 2;  // DIT (dot) paddle – TRRS Tip → D2, Sleeve → GND
+const int PIN_KEYER_DAH  = 3;  // DAH (dash) paddle – TRRS Ring1 → D3, Sleeve → GND
 const int PIN_ERASE      = 4;  // ERASE button connected to pin 4
 const int PIN_SEND       = 5;  // SEND button connected to pin 5
 const int PIN_LED_GREEN  = 6;  // Green LED - flashes for DOT and successful decode (with 220 ohm resistor to GND)
@@ -140,10 +148,13 @@ unsigned long lastAIScrollTime = 0;            // When the AI reply last scrolle
 bool          showingAIResponse = false;       // Are we currently showing the AI reply on the LCD?
 
 // --- Input debounce tracking ---
-bool keyerLastRaw = HIGH;                 // Last raw reading from keyer input
-unsigned long keyerEdgeTime = 0;          // Time when keyer reading last changed
-bool keyerHeld = false;                   // True while keyer is pressed
-unsigned long keyerPressStart = 0;        // Time when current keyer press started
+bool keyerLastRaw = HIGH;                 // Last raw reading from dit (dot) paddle
+unsigned long keyerEdgeTime = 0;          // Time when dit reading last changed
+bool keyerHeld = false;                   // True while dit paddle is pressed
+unsigned long keyerPressStart = 0;        // Time when current dit press started
+bool dahLastRaw = HIGH;                   // Last raw reading from dah (dash) paddle
+unsigned long dahEdgeTime = 0;            // Time when dah reading last changed
+bool dahHeld = false;                     // True while dah paddle is pressed
 bool eraseLastRaw = HIGH;  unsigned long eraseEdgeTime = 0;  bool eraseHeld = false;  // ERASE button state
 bool sendLastRaw  = HIGH;  unsigned long sendEdgeTime  = 0;  bool sendHeld  = false;  // SEND button state
 
@@ -355,9 +366,10 @@ void setup() {
 
   // Set the input pins as inputs with built-in pull-up resistors
   // (INPUT_PULLUP means the pin reads HIGH normally and LOW when the button is pressed)
-  pinMode(PIN_KEYER, INPUT_PULLUP);  // Morse keyer input pin
-  pinMode(PIN_ERASE, INPUT_PULLUP);  // ERASE button pin
-  pinMode(PIN_SEND,  INPUT_PULLUP);  // SEND button pin
+  pinMode(PIN_KEYER,     INPUT_PULLUP);  // DIT (dot) paddle input pin
+  pinMode(PIN_KEYER_DAH, INPUT_PULLUP);  // DAH (dash) paddle input pin
+  pinMode(PIN_ERASE,     INPUT_PULLUP);  // ERASE button pin
+  pinMode(PIN_SEND,      INPUT_PULLUP);  // SEND button pin
 
   // Set the LED pins as outputs so we can turn them on and off
   pinMode(PIN_LED_GREEN,  OUTPUT);   // Green LED pin
@@ -428,7 +440,7 @@ void loop() {
     updateLCD();                                        // Update the LCD screen
   }
 
-  // Check Morse keyer transitions and classify each press by duration
+  // Check DIT (dot) paddle — pressing the dit paddle always records a DOT
   bool keyerRaw = digitalRead(PIN_KEYER);               // LOW = pressed, HIGH = released
   if (keyerRaw != keyerLastRaw) {                       // state changed, start debounce timer
     keyerEdgeTime = millis();
@@ -441,24 +453,42 @@ void loop() {
     } else if (keyerRaw == HIGH && keyerHeld) {         // press just ended
       keyerHeld = false;
       unsigned long pressMs = millis() - keyerPressStart;
-      char symbol = (pressMs <= KEYER_DOT_MAX_MS) ? '.' : '-';  // short=dot, long=dash
-      const char *symbolName = (symbol == '.') ? "DOT" : "DASH";
       char keyLog[48];
-      snprintf(keyLog, sizeof(keyLog), "[KEY] %s %lu", symbolName, pressMs);
+      snprintf(keyLog, sizeof(keyLog), "[KEY] DOT %lu", pressMs);
       Serial.println(keyLog);
       if (morseLen < MAX_PATTERN - 1) {                 // Only add if pattern isn't full
-        morsePattern[morseLen++] = symbol;
+        morsePattern[morseLen++] = '.';
         morsePattern[morseLen]   = '\0';
         lastInputTime = millis();
         inputOccurred = true;
         patternChar.writeValue((uint8_t *)morsePattern, (unsigned int)morseLen);
         lcdPrint(0, morsePattern);
       }
-      if (symbol == '.') {
-        flashGreen();
-      } else {
-        flashRed();
+      flashGreen();                                     // Green LED = dot
+    }
+  }
+
+  // Check DAH (dash) paddle — pressing the dah paddle always records a DASH
+  bool dahRaw = digitalRead(PIN_KEYER_DAH);             // LOW = pressed, HIGH = released
+  if (dahRaw != dahLastRaw) {                           // state changed, start debounce timer
+    dahEdgeTime = millis();
+    dahLastRaw = dahRaw;
+  }
+  if (millis() - dahEdgeTime >= DEBOUNCE_MS) {          // stable long enough to trust state
+    if (dahRaw == LOW && !dahHeld) {                    // new press started
+      dahHeld = true;
+    } else if (dahRaw == HIGH && dahHeld) {             // press just ended
+      dahHeld = false;
+      Serial.println(F("[KEY] DASH paddle"));
+      if (morseLen < MAX_PATTERN - 1) {                 // Only add if pattern isn't full
+        morsePattern[morseLen++] = '-';
+        morsePattern[morseLen]   = '\0';
+        lastInputTime = millis();
+        inputOccurred = true;
+        patternChar.writeValue((uint8_t *)morsePattern, (unsigned int)morseLen);
+        lcdPrint(0, morsePattern);
       }
+      flashRed();                                       // Red LED = dash
     }
   }
 

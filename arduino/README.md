@@ -15,11 +15,21 @@ This folder contains the Arduino sketch for the **Morse Code Encoder** component
 ### Board
 **Arduino Nano 33 BLE** (nRF52840 / ARM Cortex-M4) or the Nano 33 BLE Sense variant.
 
-### Inputs (3×, connect each between the listed pin and GND)
+### Inputs — TRRS iambic paddle keyer (2-contact)
+
+Connect via a standard 3.5 mm TRRS (4-pole) plug:
+
+| TRRS segment | Arduino pin | Function | LED feedback colour |
+|---|---|---|---|
+| **Tip**    | D2 | DIT paddle – every press = dot  | Green |
+| **Ring 1** | D3 | DAH paddle – every press = dash | Red   |
+| **Ring 2** | not connected | — | — |
+| **Sleeve** | GND | Common ground | — |
+
+### Other inputs
 
 | Pin | Function | LED feedback colour |
 |-----|----------|---------------------|
-| D2  | MORSE KEYER – short press = dot, long press = dash | White/Cyan |
 | D4  | ERASE – clear the current pattern **and** the word buffer | Red   |
 | D5  | SEND  – transmit the current word to the Raspberry Pi via BLE | Blue  |
 
@@ -81,8 +91,9 @@ The Raspberry Pi 3B connects to this peripheral as a BLE central using a library
 ## How to Use
 
 1. **Power on** the Arduino — the LCD shows "Ready BLE OK" and the green LED flashes.  
-2. **Enter a character** by tapping/holding the Morse keyer.  
-   - Short press = dot (`.`), long press = dash (`-`)  
+2. **Enter a character** using the iambic paddle:  
+   - Press **DIT paddle** (Tip → D2) = dot (`.`) — green LED flashes  
+   - Press **DAH paddle** (Ring1 → D3) = dash (`-`) — red LED flashes  
    The current pattern is shown on **LCD line 1** in real time.  
 3. **After 800 ms of inactivity** the pattern is automatically decoded:  
    - Recognised character → appended to **LCD line 2** (green LED flash).  
