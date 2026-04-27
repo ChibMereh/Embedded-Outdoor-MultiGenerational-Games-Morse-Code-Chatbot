@@ -404,7 +404,6 @@ void setup() {
   // Show ready message and flash all three LEDs in sequence to show they work
   lcdPrint(0, "Ready BLE OK  ");                       // Show ready on LCD top row
   lcdPrint(1, "Key Erase Send");                       // Show control names on LCD bottom row
-  keyerPressStart = millis();                          // Initialize keyer press start timestamp
   flashGreen();                                        // Flash green (DOT colour) to test it
   flashRed();                                          // Flash red (DASH colour) to test it
   flashYellow();                                       // Flash yellow (SEND/ERASE colour) to test it

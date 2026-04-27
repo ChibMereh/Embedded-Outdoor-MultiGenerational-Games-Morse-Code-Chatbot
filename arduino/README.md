@@ -104,10 +104,10 @@ Alternatively, entering the Morse sequence for `'/'` (dash · dot · dot · dash
 Open the Serial Monitor at **9600 baud** to see:
 
 ```
-[KEY] . 120
+[KEY] DOT 120
 [PATTERN] .-
 [DECODE] .- -> 'A'
-[KEY] - 410
+[KEY] DASH 410
 [PATTERN] -
 [DECODE] - -> 'T'
 [BTN] SEND pressed
