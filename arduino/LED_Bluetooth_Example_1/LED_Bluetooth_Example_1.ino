@@ -6,8 +6,8 @@
  *   Pin 2 - MORSE KEYER input (connect between pin and GND, uses INPUT_PULLUP)
  *   Pin 4 - ERASE button      (connect between pin and GND, uses INPUT_PULLUP)
  *   Pin 5 - SEND button       (connect between pin and GND, uses INPUT_PULLUP)
- *   Pin 6 - GREEN LED     (with 220 ohm resistor to GND) - flashes for DOT
- *   Pin 7 - RED LED       (with 220 ohm resistor to GND) - flashes for DASH
+ *   Pin 6 - GREEN LED     (with 220 ohm resistor to GND) - flashes for dot (short press)
+ *   Pin 7 - RED LED       (with 220 ohm resistor to GND) - flashes for dash (long press)
  *   Pin 8 - YELLOW LED    (with 220 ohm resistor to GND) - flashes for SEND and ERASE
  *   Standard HD44780 LCD 14x2 (parallel 4-bit mode, no I2C backpack needed)
  *     Pin A0 (RS) -> RS  pin on LCD
@@ -441,7 +441,10 @@ void loop() {
       keyerHeld = false;
       unsigned long pressMs = millis() - keyerPressStart;
       char symbol = (pressMs <= KEYER_DOT_MAX_MS) ? '.' : '-';  // short=dot, long=dash
-      Serial.print(F("KEY ")); Serial.print(symbol); Serial.print(F(" ")); Serial.println(pressMs);
+      Serial.print(F("KEY "));
+      Serial.print(symbol);
+      Serial.print(F(" "));
+      Serial.println(pressMs);
       if (morseLen < MAX_PATTERN - 1) {                 // Only add if pattern isn't full
         morsePattern[morseLen++] = symbol;
         morsePattern[morseLen]   = '\0';
