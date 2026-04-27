@@ -3,10 +3,9 @@
  * Morse Code Encoder - Simple Version for Arduino Nano 33 BLE
  *
  * HARDWARE (all pins changeable below)
- *   Pin 2 - DOT button    (connect between pin and GND, uses INPUT_PULLUP)
- *   Pin 3 - DASH button   (connect between pin and GND, uses INPUT_PULLUP)
- *   Pin 4 - ERASE button  (connect between pin and GND, uses INPUT_PULLUP)
- *   Pin 5 - SEND button   (connect between pin and GND, uses INPUT_PULLUP)
+ *   Pin 2 - MORSE KEYER input (connect between pin and GND, uses INPUT_PULLUP)
+ *   Pin 4 - ERASE button      (connect between pin and GND, uses INPUT_PULLUP)
+ *   Pin 5 - SEND button       (connect between pin and GND, uses INPUT_PULLUP)
  *   Pin 6 - GREEN LED     (with 220 ohm resistor to GND) - flashes for DOT
  *   Pin 7 - RED LED       (with 220 ohm resistor to GND) - flashes for DASH
  *   Pin 8 - YELLOW LED    (with 220 ohm resistor to GND) - flashes for SEND and ERASE
@@ -27,7 +26,7 @@
  *   LiquidCrystal (built into the Arduino IDE)
  *
  * HOW IT WORKS
- *   1. Press DOT or DASH - the symbol appears on the LCD screen
+ *   1. Tap/hold the keyer - short press = DOT, long press = DASH
  *   2. After 800ms of no input, the pattern is decoded into a letter
  *      - GREEN LED flashes for a good decode, RED for unknown pattern
  *   3. Press SEND to transmit the word via Bluetooth to the computer
@@ -50,9 +49,8 @@
 #include <LiquidCrystal.h>       // For the parallel HD44780 LCD screen
 
 // --- Pin numbers ---
-// These tell the Arduino which pin each button and the LED are on
-const int PIN_DOT        = 2;  // DOT button connected to pin 2
-const int PIN_DASH       = 3;  // DASH button connected to pin 3
+// These tell the Arduino which pin each input and LED are on
+const int PIN_KEYER      = 2;  // Morse keyer input connected to pin 2
 const int PIN_ERASE      = 4;  // ERASE button connected to pin 4
 const int PIN_SEND       = 5;  // SEND button connected to pin 5
 const int PIN_LED_GREEN  = 6;  // Green LED - flashes for DOT and successful decode (with 220 ohm resistor to GND)
@@ -72,6 +70,7 @@ const unsigned long DEBOUNCE_MS     = 50;   // Wait 50ms for button to stop boun
 const unsigned long CHAR_TIMEOUT_MS = 800;  // Wait 800ms of silence before decoding a letter
 const unsigned long LED_FLASH_MS    = 200;  // LED stays on for 200ms when it flashes
 const unsigned long LCD_SCROLL_MS   = 400;  // How often the LCD scrolls long text (every 400ms)
+const unsigned long KEYER_DOT_MAX_MS = 250; // Presses up to this duration are interpreted as dots
 
 // --- Morse playback speeds (for playing AI response as Morse on LED) ---
 const unsigned long DOT_MS    = 200;   // LED on time for a dot (short flash)
@@ -139,10 +138,11 @@ int           aiScrollOffset  = 0;             // Which character the AI reply s
 unsigned long lastAIScrollTime = 0;            // When the AI reply last scrolled
 bool          showingAIResponse = false;       // Are we currently showing the AI reply on the LCD?
 
-// --- Button debounce tracking (one set of variables per button) ---
-// These variables help us detect a clean button press without false triggers
-bool dotLastRaw   = HIGH;  unsigned long dotEdgeTime   = 0;  bool dotHeld   = false;  // DOT button state
-bool dashLastRaw  = HIGH;  unsigned long dashEdgeTime  = 0;  bool dashHeld  = false;  // DASH button state
+// --- Input debounce tracking ---
+bool keyerLastRaw = HIGH;                 // Last raw reading from keyer input
+unsigned long keyerEdgeTime = 0;          // Time when keyer reading last changed
+bool keyerHeld = false;                   // True while keyer is pressed
+unsigned long keyerPressStart = 0;        // Time when current keyer press started
 bool eraseLastRaw = HIGH;  unsigned long eraseEdgeTime = 0;  bool eraseHeld = false;  // ERASE button state
 bool sendLastRaw  = HIGH;  unsigned long sendEdgeTime  = 0;  bool sendHeld  = false;  // SEND button state
 
@@ -352,10 +352,9 @@ void setup() {
   while (!Serial && millis() < 3000) {}                 // Wait up to 3 seconds for Serial to be ready
   Serial.println(F("Morse Encoder starting"));          // Print startup message to Serial Monitor
 
-  // Set the button pins as inputs with built-in pull-up resistors
+  // Set the input pins as inputs with built-in pull-up resistors
   // (INPUT_PULLUP means the pin reads HIGH normally and LOW when the button is pressed)
-  pinMode(PIN_DOT,   INPUT_PULLUP);  // DOT button pin
-  pinMode(PIN_DASH,  INPUT_PULLUP);  // DASH button pin
+  pinMode(PIN_KEYER, INPUT_PULLUP);  // Morse keyer input pin
   pinMode(PIN_ERASE, INPUT_PULLUP);  // ERASE button pin
   pinMode(PIN_SEND,  INPUT_PULLUP);  // SEND button pin
 
@@ -403,7 +402,7 @@ void setup() {
 
   // Show ready message and flash all three LEDs in sequence to show they work
   lcdPrint(0, "Ready BLE OK  ");                       // Show ready on LCD top row
-  lcdPrint(1, "Dot Dash Er Snd");                      // Show button names on LCD bottom row
+  lcdPrint(1, "Key Erase Send");                       // Show control names on LCD bottom row
   flashGreen();                                        // Flash green (DOT colour) to test it
   flashRed();                                          // Flash red (DASH colour) to test it
   flashYellow();                                       // Flash yellow (SEND/ERASE colour) to test it
@@ -428,32 +427,31 @@ void loop() {
     updateLCD();                                        // Update the LCD screen
   }
 
-  // Check if the DOT button was pressed
-  if (pressed(PIN_DOT, dotLastRaw, dotEdgeTime, dotHeld)) {
-    Serial.println(F("DOT"));                           // Print to Serial Monitor
-    if (morseLen < MAX_PATTERN - 1) {                   // Only add if pattern isn't full
-      morsePattern[morseLen++] = '.';                   // Append a dot to the pattern
-      morsePattern[morseLen]   = '\0';                  // Add end-of-string marker
-      lastInputTime = millis();                         // Record the time of this input
-      inputOccurred = true;                             // Mark that at least one input has happened
-      patternChar.writeValue((uint8_t *)morsePattern, (unsigned int)morseLen);  // Send over BLE
-      lcdPrint(0, morsePattern);                        // Show updated pattern on LCD
-    }
-    flashGreen();                                       // Flash GREEN LED to confirm DOT
+  // Check Morse keyer transitions and classify each press by duration
+  bool keyRaw = digitalRead(PIN_KEYER);                 // LOW = pressed, HIGH = released
+  if (keyRaw != keyerLastRaw) {                         // state changed, start debounce timer
+    keyerEdgeTime = millis();
+    keyerLastRaw = keyRaw;
   }
-
-  // Check if the DASH button was pressed
-  if (pressed(PIN_DASH, dashLastRaw, dashEdgeTime, dashHeld)) {
-    Serial.println(F("DASH"));                          // Print to Serial Monitor
-    if (morseLen < MAX_PATTERN - 1) {                   // Only add if pattern isn't full
-      morsePattern[morseLen++] = '-';                   // Append a dash to the pattern
-      morsePattern[morseLen]   = '\0';                  // Add end-of-string marker
-      lastInputTime = millis();                         // Record the time of this input
-      inputOccurred = true;                             // Mark that at least one input has happened
-      patternChar.writeValue((uint8_t *)morsePattern, (unsigned int)morseLen);  // Send over BLE
-      lcdPrint(0, morsePattern);                        // Show updated pattern on LCD
+  if (millis() - keyerEdgeTime >= DEBOUNCE_MS) {        // stable long enough to trust state
+    if (keyRaw == LOW && !keyerHeld) {                  // new press started
+      keyerHeld = true;
+      keyerPressStart = millis();
+    } else if (keyRaw == HIGH && keyerHeld) {           // press just ended
+      keyerHeld = false;
+      unsigned long pressMs = millis() - keyerPressStart;
+      char symbol = (pressMs <= KEYER_DOT_MAX_MS) ? '.' : '-';  // short=dot, long=dash
+      Serial.print(F("KEY ")); Serial.print(symbol); Serial.print(F(" ")); Serial.println(pressMs);
+      if (morseLen < MAX_PATTERN - 1) {                 // Only add if pattern isn't full
+        morsePattern[morseLen++] = symbol;
+        morsePattern[morseLen]   = '\0';
+        lastInputTime = millis();
+        inputOccurred = true;
+        patternChar.writeValue((uint8_t *)morsePattern, (unsigned int)morseLen);
+        lcdPrint(0, morsePattern);
+      }
+      if (symbol == '.') flashGreen(); else flashRed();
     }
-    flashRed();                                         // Flash RED LED to confirm DASH
   }
 
   // Check if the ERASE button was pressed

@@ -15,16 +15,15 @@ This folder contains the Arduino sketch for the **Morse Code Encoder** component
 ### Board
 **Arduino Nano 33 BLE** (nRF52840 / ARM Cortex-M4) or the Nano 33 BLE Sense variant.
 
-### Buttons (4×, connect each between the listed pin and GND)
+### Inputs (3×, connect each between the listed pin and GND)
 
 | Pin | Function | LED feedback colour |
 |-----|----------|---------------------|
-| D2  | DOT   (•)  – append a dot to the current pattern | White |
-| D3  | DASH  (-)  – append a dash to the current pattern | Cyan  |
+| D2  | MORSE KEYER – short press = dot, long press = dash | White/Cyan |
 | D4  | ERASE – clear the current pattern **and** the word buffer | Red   |
 | D5  | SEND  – transmit the current word to the Raspberry Pi via BLE | Blue  |
 
-All buttons use the internal pull-up resistor (`INPUT_PULLUP`).  
+All inputs use the internal pull-up resistor (`INPUT_PULLUP`).  
 Connect one leg to the Arduino pin and the other leg directly to GND — no external resistors needed.
 
 ### RGB LED (common-cathode)
@@ -82,7 +81,8 @@ The Raspberry Pi 3B connects to this peripheral as a BLE central using a library
 ## How to Use
 
 1. **Power on** the Arduino — the LCD shows "Ready BLE OK" and the green LED flashes.  
-2. **Enter a character** by pressing the DOT and DASH buttons in sequence.  
+2. **Enter a character** by tapping/holding the Morse keyer.  
+   - Short press = dot (`.`), long press = dash (`-`)  
    The current pattern is shown on **LCD line 1** in real time.  
 3. **After 800 ms of inactivity** the pattern is automatically decoded:  
    - Recognised character → appended to **LCD line 2** (green LED flash).  
@@ -104,10 +104,10 @@ Alternatively, entering the Morse sequence for `'/'` (dash · dot · dot · dash
 Open the Serial Monitor at **9600 baud** to see:
 
 ```
-[BTN] DOT pressed
+[KEY] . 120
 [PATTERN] .-
 [DECODE] .- -> 'A'
-[BTN] DASH pressed
+[KEY] - 410
 [PATTERN] -
 [DECODE] - -> 'T'
 [BTN] SEND pressed
