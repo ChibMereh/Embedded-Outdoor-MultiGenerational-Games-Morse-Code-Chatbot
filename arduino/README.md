@@ -46,19 +46,32 @@ Connect one leg to the Arduino pin and the other leg directly to GND — no exte
 
 Typical wiring: each channel → 220 Ω resistor → LED anode; LED cathode → GND.
 
-### 14-Character Serial LCD (HD44780 + I2C backpack)
+### LCD (HD44780 — parallel 4-bit mode, no I2C backpack)
 
-| LCD signal | Arduino Nano 33 BLE pin |
-|-----------|------------------------|
-| SDA       | SDA (A4)               |
-| SCL       | SCL (A5)               |
-| VCC       | 5 V or 3.3 V (check backpack datasheet) |
-| GND       | GND                    |
+The sketch drives the LCD directly in **4-bit parallel mode** using the built-in `LiquidCrystal` library.
 
-* Default I2C address: **0x27**.  
-  If the display is blank after power-on, try **0x3F** instead (edit line 244 in the sketch).
-* The sketch is written for a **2-row × 14-column** display.  
-  If you use a standard 16-column module, change `const int LCD_COLS = 14;` to `16`.
+| LCD pin | Arduino Nano 33 BLE pin | Notes |
+|---------|------------------------|-------|
+| VSS     | GND                    | Ground |
+| VDD     | 5 V                    | Logic and backlight power — use the USB 5 V pin |
+| V0      | Wiper of 10 kΩ pot (or 10 kΩ resistor to GND) | **Contrast** — if V0 floats or is tied to 5 V the screen is blank; adjust the pot until characters appear |
+| RS      | A0                     | Register Select |
+| RW      | GND                    | Tie to GND (write-only mode) |
+| EN      | A1                     | Enable |
+| D0–D3   | not connected          | Not used in 4-bit mode |
+| D4      | A2                     | Data bit 4 |
+| D5      | A3                     | Data bit 5 |
+| D6      | A4                     | Data bit 6 |
+| D7      | A5                     | Data bit 7 |
+| A (LED+)| 5 V via 220 Ω resistor | Backlight anode |
+| K (LED-)| GND                    | Backlight cathode |
+
+> **Blank screen?** The most common cause is the contrast (V0) pin.  
+> Turn the potentiometer slowly — characters should become visible somewhere in the middle of its range.  
+> If you don't have a pot, a 10 kΩ resistor between V0 and GND usually gives enough contrast.
+
+The sketch is written for a **2-row × 14-column** display.  
+If you use a standard 16-column module, change `const int LCD_COLS = 14;` to `16`.
 
 ---
 
@@ -67,7 +80,7 @@ Typical wiring: each channel → 220 Ω resistor → LED anode; LED cathode → 
 | Library | Author | Purpose |
 |---------|--------|---------|
 | **ArduinoBLE** | Arduino | BLE peripheral on the nRF52840 |
-| **LiquidCrystal I2C** | Frank de Brabander | I2C LCD control |
+| **LiquidCrystal** | Arduino (built-in) | Parallel 4-bit HD44780 LCD control |
 
 ---
 
