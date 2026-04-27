@@ -428,22 +428,21 @@ void loop() {
   }
 
   // Check Morse keyer transitions and classify each press by duration
-  bool keyRaw = digitalRead(PIN_KEYER);                 // LOW = pressed, HIGH = released
-  if (keyRaw != keyerLastRaw) {                         // state changed, start debounce timer
+  bool keyerRaw = digitalRead(PIN_KEYER);               // LOW = pressed, HIGH = released
+  if (keyerRaw != keyerLastRaw) {                       // state changed, start debounce timer
     keyerEdgeTime = millis();
-    keyerLastRaw = keyRaw;
+    keyerLastRaw = keyerRaw;
   }
   if (millis() - keyerEdgeTime >= DEBOUNCE_MS) {        // stable long enough to trust state
-    if (keyRaw == LOW && !keyerHeld) {                  // new press started
+    if (keyerRaw == LOW && !keyerHeld) {                // new press started
       keyerHeld = true;
       keyerPressStart = millis();
-    } else if (keyRaw == HIGH && keyerHeld) {           // press just ended
+    } else if (keyerRaw == HIGH && keyerHeld) {         // press just ended
       keyerHeld = false;
       unsigned long pressMs = millis() - keyerPressStart;
       char symbol = (pressMs <= KEYER_DOT_MAX_MS) ? '.' : '-';  // short=dot, long=dash
-      Serial.print(F("KEY "));
-      Serial.print(symbol);
-      Serial.print(F(" "));
+      Serial.print(F("[KEY] "));
+      Serial.print((symbol == '.') ? F("DOT ") : F("DASH "));
       Serial.println(pressMs);
       if (morseLen < MAX_PATTERN - 1) {                 // Only add if pattern isn't full
         morsePattern[morseLen++] = symbol;
