@@ -71,7 +71,7 @@ const unsigned long DEBOUNCE_MS     = 50;   // Wait 50ms for button to stop boun
 const unsigned long CHAR_TIMEOUT_MS = 800;  // Wait 800ms of silence before decoding a letter
 const unsigned long LED_FLASH_MS    = 200;  // LED stays on for 200ms when it flashes
 const unsigned long LCD_SCROLL_MS   = 400;  // How often the LCD scrolls long text (every 400ms)
-const unsigned long KEYER_DOT_MAX_MS = 250; // Presses up to this duration are interpreted as dots
+const unsigned long KEYER_DOT_MAX_MS = 250; // Presses up to this duration are dots (tune for operator speed)
 
 // --- Morse playback speeds (for playing AI response as Morse on LED) ---
 const unsigned long DOT_MS    = 200;   // LED on time for a dot (short flash)
@@ -443,7 +443,7 @@ void loop() {
       unsigned long pressMs = millis() - keyerPressStart;
       char symbol = (pressMs <= KEYER_DOT_MAX_MS) ? '.' : '-';  // short=dot, long=dash
       const char *symbolName = (symbol == '.') ? "DOT" : "DASH";
-      char keyLog[32];
+      char keyLog[48];
       snprintf(keyLog, sizeof(keyLog), "[KEY] %s %lu", symbolName, pressMs);
       Serial.println(keyLog);
       if (morseLen < MAX_PATTERN - 1) {                 // Only add if pattern isn't full
