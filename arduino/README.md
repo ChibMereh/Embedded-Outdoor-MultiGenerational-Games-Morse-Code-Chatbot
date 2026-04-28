@@ -15,11 +15,21 @@ This folder contains the Arduino sketch for the **Morse Code Encoder** component
 ### Board
 **Arduino Nano 33 BLE** (nRF52840 / ARM Cortex-M4) or the Nano 33 BLE Sense variant.
 
-### Inputs (3×, connect each between the listed pin and GND)
+### Inputs — TRRS iambic paddle keyer (2-contact)
+
+Connect via a standard 3.5 mm TRRS (4-pole) plug:
+
+| TRRS segment | Arduino pin | Function | LED feedback colour |
+|---|---|---|---|
+| **Tip**    | D2 | DIT paddle – every press = dot  | Green |
+| **Ring 1** | D3 | DAH paddle – every press = dash | Red   |
+| **Ring 2** | not connected | — | — |
+| **Sleeve** | GND | Common ground | — |
+
+### Other inputs
 
 | Pin | Function | LED feedback colour |
 |-----|----------|---------------------|
-| D2  | MORSE KEYER – short press = dot, long press = dash | White/Cyan |
 | D4  | ERASE – clear the current pattern **and** the word buffer | Red   |
 | D5  | SEND  – transmit the current word to the Raspberry Pi via BLE | Blue  |
 
@@ -36,19 +46,32 @@ Connect one leg to the Arduino pin and the other leg directly to GND — no exte
 
 Typical wiring: each channel → 220 Ω resistor → LED anode; LED cathode → GND.
 
-### 14-Character Serial LCD (HD44780 + I2C backpack)
+### LCD (HD44780 — parallel 4-bit mode, no I2C backpack)
 
-| LCD signal | Arduino Nano 33 BLE pin |
-|-----------|------------------------|
-| SDA       | SDA (A4)               |
-| SCL       | SCL (A5)               |
-| VCC       | 5 V or 3.3 V (check backpack datasheet) |
-| GND       | GND                    |
+The sketch drives the LCD directly in **4-bit parallel mode** using the built-in `LiquidCrystal` library.
 
-* Default I2C address: **0x27**.  
-  If the display is blank after power-on, try **0x3F** instead (edit line 244 in the sketch).
-* The sketch is written for a **2-row × 14-column** display.  
-  If you use a standard 16-column module, change `const int LCD_COLS = 14;` to `16`.
+| LCD pin | Arduino Nano 33 BLE pin | Notes |
+|---------|------------------------|-------|
+| VSS     | GND                    | Ground |
+| VDD     | 5 V                    | Logic and backlight power — use the USB 5 V pin |
+| V0      | Wiper of 10 kΩ pot (or 10 kΩ resistor to GND) | **Contrast** — if V0 floats or is tied to 5 V the screen is blank; adjust the pot until characters appear |
+| RS      | A0                     | Register Select |
+| RW      | GND                    | Tie to GND (write-only mode) |
+| EN      | A1                     | Enable |
+| D0–D3   | not connected          | Not used in 4-bit mode |
+| D4      | A2                     | Data bit 4 |
+| D5      | A3                     | Data bit 5 |
+| D6      | A4                     | Data bit 6 |
+| D7      | A5                     | Data bit 7 |
+| A (LED+)| 5 V via 220 Ω resistor | Backlight anode |
+| K (LED-)| GND                    | Backlight cathode |
+
+> **Blank screen?** The most common cause is the contrast (V0) pin.  
+> Turn the potentiometer slowly — characters should become visible somewhere in the middle of its range.  
+> If you don't have a pot, a 10 kΩ resistor between V0 and GND usually gives enough contrast.
+
+The sketch is written for a **2-row × 14-column** display.  
+If you use a standard 16-column module, change `const int LCD_COLS = 14;` to `16`.
 
 ---
 
@@ -57,7 +80,7 @@ Typical wiring: each channel → 220 Ω resistor → LED anode; LED cathode → 
 | Library | Author | Purpose |
 |---------|--------|---------|
 | **ArduinoBLE** | Arduino | BLE peripheral on the nRF52840 |
-| **LiquidCrystal I2C** | Frank de Brabander | I2C LCD control |
+| **LiquidCrystal** | Arduino (built-in) | Parallel 4-bit HD44780 LCD control |
 
 ---
 
@@ -81,8 +104,9 @@ The Raspberry Pi 3B connects to this peripheral as a BLE central using a library
 ## How to Use
 
 1. **Power on** the Arduino — the LCD shows "Ready BLE OK" and the green LED flashes.  
-2. **Enter a character** by tapping/holding the Morse keyer.  
-   - Short press = dot (`.`), long press = dash (`-`)  
+2. **Enter a character** using the iambic paddle:  
+   - Press **DIT paddle** (Tip → D2) = dot (`.`) — green LED flashes  
+   - Press **DAH paddle** (Ring1 → D3) = dash (`-`) — red LED flashes  
    The current pattern is shown on **LCD line 1** in real time.  
 3. **After 800 ms of inactivity** the pattern is automatically decoded:  
    - Recognised character → appended to **LCD line 2** (green LED flash).  
