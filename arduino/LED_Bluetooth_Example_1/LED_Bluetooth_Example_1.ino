@@ -537,14 +537,12 @@ void loop() {
   if (pressed(PIN_SEND, sendLastRaw, sendEdgeTime, sendHeld)) {
     Serial.println(F("SEND"));                          // Print to Serial Monitor
     if (morseLen > 0) finalizeCharacter();              // Decode any unfinished pattern first
-    if (wordLen > 0) {
-      sendWord();                                       // Send the word over Bluetooth
-    } else if (aiResponsePendingReveal && aiResponseLen > 0) {
+    if (wordLen == 0 && aiResponsePendingReveal && aiResponseLen > 0) {
       showingAIResponse = true;                         // Reveal hidden AI response text
       aiResponsePendingReveal = false;                  // Reveal request fulfilled
       updateLCD();                                      // Refresh LCD immediately
     } else {
-      sendWord();                                       // Existing empty-buffer behavior (logs "Nothing to send")
+      sendWord();                                       // Send word or keep existing empty-buffer behavior
     }
     flashYellow();                                      // Flash YELLOW LED to confirm SEND
   }
