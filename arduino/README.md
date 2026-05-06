@@ -46,6 +46,14 @@ Connect one leg to the Arduino pin and the other leg directly to GND — no exte
 
 Typical wiring: each channel → 220 Ω resistor → LED anode; LED cathode → GND.
 
+### Piezo buzzer
+
+| Pin | Function |
+|-----|----------|
+| D9  | Piezo buzzer output (dot = higher tone, dash = lower tone) |
+
+Wire the buzzer signal leg to **D9** and the other leg to **GND**.
+
 ### LCD (HD44780 — parallel 4-bit mode, no I2C backpack)
 
 The sketch drives the LCD directly in **4-bit parallel mode** using the built-in `LiquidCrystal` library.
@@ -105,8 +113,8 @@ The Raspberry Pi 3B connects to this peripheral as a BLE central using a library
 
 1. **Power on** the Arduino — the LCD shows "Ready BLE OK" and the green LED flashes.  
 2. **Enter a character** using the iambic paddle:  
-   - Press **DIT paddle** (Tip → D2) = dot (`.`) — green LED flashes  
-   - Press **DAH paddle** (Ring1 → D3) = dash (`-`) — red LED flashes  
+   - Press **DIT paddle** (Tip → D2) = dot (`.`) — green LED flashes + higher buzzer tone  
+   - Press **DAH paddle** (Ring1 → D3) = dash (`-`) — red LED flashes + lower buzzer tone  
    The current pattern is shown on **LCD line 1** in real time.  
 3. **After 800 ms of inactivity** the pattern is automatically decoded:  
    - Recognised character → appended to **LCD line 2** (green LED flash).  

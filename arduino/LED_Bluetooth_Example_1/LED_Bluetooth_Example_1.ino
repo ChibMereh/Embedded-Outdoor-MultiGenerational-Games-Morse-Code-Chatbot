@@ -10,6 +10,7 @@
  *   Pin 6 - GREEN LED     (with 220 ohm resistor to GND) - flashes for dot (short press)
  *   Pin 7 - RED LED       (with 220 ohm resistor to GND) - flashes for dash (long press)
  *   Pin 8 - YELLOW LED    (with 220 ohm resistor to GND) - flashes for SEND and ERASE
+ *   Pin 9 - PIEZO BUZZER  (signal pin to D9, other pin to GND) - beeps for dot/dash
  *   Standard HD44780 LCD 14x2 (parallel 4-bit mode, no I2C backpack needed)
  *     Pin A0 (RS) -> RS  pin on LCD
  *     Pin A1 (EN) -> EN  pin on LCD
@@ -65,6 +66,7 @@ const int PIN_SEND       = 5;  // SEND button connected to pin 5
 const int PIN_LED_GREEN  = 6;  // Green LED - flashes for DOT and successful decode (with 220 ohm resistor to GND)
 const int PIN_LED_RED    = 7;  // Red LED   - flashes for DASH and unknown patterns  (with 220 ohm resistor to GND)
 const int PIN_LED_YELLOW = 8;  // Yellow LED - flashes for SEND and ERASE            (with 220 ohm resistor to GND)
+const int PIN_BUZZER     = 9;  // Piezo buzzer signal pin (other leg to GND)
 
 // --- Parallel LCD pin numbers ---
 const int PIN_LCD_RS = A0;  // LCD Register Select pin
@@ -80,6 +82,8 @@ const unsigned long CHAR_TIMEOUT_MS = 800;  // Wait 800ms of silence before deco
 const unsigned long LED_FLASH_MS    = 200;  // LED stays on for 200ms when it flashes
 const unsigned long LCD_SCROLL_MS   = 400;  // How often the LCD scrolls long text (every 400ms)
 const unsigned long KEYER_DOT_MAX_MS = 250; // Presses up to this duration are dots (tune for operator speed)
+const unsigned int  DOT_TONE_HZ      = 1200; // Dot beep pitch
+const unsigned int  DASH_TONE_HZ     = 700;  // Dash beep pitch (different so it is distinguishable)
 
 // --- Morse playback speeds (for playing AI response as Morse on LED) ---
 const unsigned long DOT_MS    = 200;   // LED on time for a dot (short flash)
@@ -151,7 +155,6 @@ bool          showingAIResponse = false;       // Are we currently showing the A
 bool keyerLastRaw = HIGH;                 // Last raw reading from dit (dot) paddle
 unsigned long keyerEdgeTime = 0;          // Time when dit reading last changed
 bool keyerHeld = false;                   // True while dit paddle is pressed
-unsigned long keyerPressStart = 0;        // Time when current dit press started
 bool dahLastRaw = HIGH;                   // Last raw reading from dah (dash) paddle
 unsigned long dahEdgeTime = 0;            // Time when dah reading last changed
 bool dahHeld = false;                     // True while dah paddle is pressed
@@ -182,18 +185,32 @@ bool pressed(int pin, bool &lastRaw, unsigned long &edgeTime, bool &held) {
   return false;                             // No new press detected
 }
 
+// Play dot feedback: green LED + higher-pitch buzzer tone for the given duration
+void signalDot(unsigned long durationMs) {
+  digitalWrite(PIN_LED_GREEN, HIGH);   // Turn green LED on
+  tone(PIN_BUZZER, DOT_TONE_HZ);       // Start higher-pitch dot tone
+  delay(durationMs);                   // Hold for requested duration
+  noTone(PIN_BUZZER);                  // Stop buzzer
+  digitalWrite(PIN_LED_GREEN, LOW);    // Turn green LED off
+}
+
+// Play dash feedback: red LED + lower-pitch buzzer tone for the given duration
+void signalDash(unsigned long durationMs) {
+  digitalWrite(PIN_LED_RED, HIGH);     // Turn red LED on
+  tone(PIN_BUZZER, DASH_TONE_HZ);      // Start lower-pitch dash tone
+  delay(durationMs);                   // Hold for requested duration
+  noTone(PIN_BUZZER);                  // Stop buzzer
+  digitalWrite(PIN_LED_RED, LOW);      // Turn red LED off
+}
+
 // Flash the GREEN LED on for LED_FLASH_MS milliseconds (used for DOT and successful decode)
 void flashGreen() {
-  digitalWrite(PIN_LED_GREEN, HIGH);  // Turn green LED on
-  delay(LED_FLASH_MS);                // Wait 200ms
-  digitalWrite(PIN_LED_GREEN, LOW);   // Turn green LED off
+  signalDot(LED_FLASH_MS);            // Dot-style light+tone feedback
 }
 
 // Flash the RED LED on for LED_FLASH_MS milliseconds (used for DASH and unknown patterns)
 void flashRed() {
-  digitalWrite(PIN_LED_RED, HIGH);    // Turn red LED on
-  delay(LED_FLASH_MS);                // Wait 200ms
-  digitalWrite(PIN_LED_RED, LOW);     // Turn red LED off
+  signalDash(LED_FLASH_MS);           // Dash-style light+tone feedback
 }
 
 // Flash the YELLOW LED on for LED_FLASH_MS milliseconds (used for SEND and ERASE)
@@ -242,13 +259,9 @@ void playMorse(const char *text) {
         for (int k = 0; MORSE[j].pat[k] != '\0'; k++) {  // Go through each dot/dash in the pattern
           if (k > 0) delay(ELEM_GAP);                 // Wait between dots/dashes (not before first one)
           if (MORSE[j].pat[k] == '.') {               // If this symbol is a dot
-            digitalWrite(PIN_LED_GREEN, HIGH);        // Turn green LED on (dot = green)
-            delay(DOT_MS);                            // Keep it on for the dot duration
-            digitalWrite(PIN_LED_GREEN, LOW);         // Turn green LED off
+            signalDot(DOT_MS);                        // Dot light+tone
           } else {                                    // Otherwise the symbol is a dash
-            digitalWrite(PIN_LED_RED, HIGH);          // Turn red LED on (dash = red)
-            delay(DASH_MS);                           // Keep it on for the dash duration
-            digitalWrite(PIN_LED_RED, LOW);           // Turn red LED off
+            signalDash(DASH_MS);                      // Dash light+tone
           }
         }
         delay(CHAR_GAP);                              // Wait between letters
@@ -375,9 +388,11 @@ void setup() {
   pinMode(PIN_LED_GREEN,  OUTPUT);   // Green LED pin
   pinMode(PIN_LED_RED,    OUTPUT);   // Red LED pin
   pinMode(PIN_LED_YELLOW, OUTPUT);   // Yellow LED pin
+  pinMode(PIN_BUZZER,     OUTPUT);   // Piezo buzzer pin
   digitalWrite(PIN_LED_GREEN,  LOW); // Make sure green LED starts off
   digitalWrite(PIN_LED_RED,    LOW); // Make sure red LED starts off
   digitalWrite(PIN_LED_YELLOW, LOW); // Make sure yellow LED starts off
+  noTone(PIN_BUZZER);                 // Make sure buzzer starts silent
 
   // Start the LCD screen
   lcd.begin(LCD_COLS, LCD_ROWS);     // Initialise the LCD with its column and row count
@@ -449,13 +464,9 @@ void loop() {
   if (millis() - keyerEdgeTime >= DEBOUNCE_MS) {        // stable long enough to trust state
     if (keyerRaw == LOW && !keyerHeld) {                // new press started
       keyerHeld = true;
-      keyerPressStart = millis();
     } else if (keyerRaw == HIGH && keyerHeld) {         // press just ended
       keyerHeld = false;
-      unsigned long pressMs = millis() - keyerPressStart;
-      char keyLog[48];
-      snprintf(keyLog, sizeof(keyLog), "[KEY] DOT %lu", pressMs);
-      Serial.println(keyLog);
+      Serial.println(F("[KEY] DOT paddle"));
       if (morseLen < MAX_PATTERN - 1) {                 // Only add if pattern isn't full
         morsePattern[morseLen++] = '.';
         morsePattern[morseLen]   = '\0';
