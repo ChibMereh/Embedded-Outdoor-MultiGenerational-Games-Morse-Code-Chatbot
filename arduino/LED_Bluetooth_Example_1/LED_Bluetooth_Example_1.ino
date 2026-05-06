@@ -82,6 +82,7 @@ const unsigned long CHAR_TIMEOUT_MS = 800;  // Wait 800ms of silence before deco
 const unsigned long LED_FLASH_MS    = 200;  // LED stays on for 200ms when it flashes
 const unsigned long LCD_SCROLL_MS   = 400;  // How often the LCD scrolls long text (every 400ms)
 // Dot/dash are selected by dedicated paddles (D2=DIT, D3=DAH), so no press-duration threshold is used.
+// Press durations are still tracked for debug logging only.
 const unsigned int  DOT_TONE_HZ      = 1200; // Dot beep pitch
 const unsigned int  DASH_TONE_HZ     = 700;  // Dash beep pitch (different so it is distinguishable)
 
