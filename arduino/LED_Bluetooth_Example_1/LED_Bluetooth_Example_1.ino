@@ -82,7 +82,7 @@ const unsigned long CHAR_TIMEOUT_MS = 800;  // Wait 800ms of silence before deco
 const unsigned long LED_FLASH_MS    = 200;  // LED stays on for 200ms when it flashes
 const unsigned long LCD_SCROLL_MS   = 400;  // How often the LCD scrolls long text (every 400ms)
 // Dot/dash are selected by dedicated paddles (D2=DIT, D3=DAH), so no press-duration threshold is used.
-// Press durations are still tracked for debug logging only; unused KEYER_DOT_MAX_MS was removed.
+// Press durations are still tracked for debug logging only.
 const unsigned int  DOT_TONE_HZ      = 1200; // Dot beep pitch
 const unsigned int  DASH_TONE_HZ     = 700;  // Dash beep pitch (different so it is distinguishable)
 
@@ -267,7 +267,8 @@ char decodeMorse(const char *pattern) {
 // during playback, which is acceptable because the user's job is to listen and decode.
 // Green LED = dot (short flash), Red LED = dash (long flash) unless toneOnly=true
 void playMorse(const char *text, bool toneOnly) {
-  lcdPrint(1, "Listen!       ");                      // Show a message on the LCD bottom row
+  if (toneOnly) lcdPrint(1, "              ");         // Keep AI decode-first playback text hidden
+  else lcdPrint(1, "Listen!       ");                 // Show playback prompt on bottom row
   for (int i = 0; text[i] != '\0'; i++) {             // Go through each character in the text
     char c = (char)toupper((unsigned char)text[i]);   // Convert to uppercase
     if (c == ' ' || c == '\n' || c == '\r') {         // If it's a space or line break
