@@ -82,7 +82,7 @@ const unsigned long CHAR_TIMEOUT_MS = 800;  // Wait 800ms of silence before deco
 const unsigned long LED_FLASH_MS    = 200;  // LED stays on for 200ms when it flashes
 const unsigned long LCD_SCROLL_MS   = 400;  // How often the LCD scrolls long text (every 400ms)
 // Dot/dash are selected by dedicated paddles (D2=DIT, D3=DAH), so no press-duration threshold is used.
-// Press durations are still tracked for debug logging only.
+// Press durations are still tracked for debug logging only; unused KEYER_DOT_MAX_MS was removed.
 const unsigned int  DOT_TONE_HZ      = 1200; // Dot beep pitch
 const unsigned int  DASH_TONE_HZ     = 700;  // Dash beep pitch (different so it is distinguishable)
 
@@ -189,7 +189,8 @@ bool pressed(int pin, bool &lastRaw, unsigned long &edgeTime, bool &held) {
   return false;                             // No new press detected
 }
 
-// Play dot feedback: green LED + higher-pitch buzzer tone for the given duration
+// Play dot feedback: green LED + higher-pitch buzzer tone for the given duration.
+// NOTE: Uses delay(), so this is blocking while active.
 void signalDot(unsigned long durationMs) {
   digitalWrite(PIN_LED_GREEN, HIGH);   // Turn green LED on
   tone(PIN_BUZZER, DOT_TONE_HZ);       // Start higher-pitch dot tone
@@ -198,7 +199,8 @@ void signalDot(unsigned long durationMs) {
   digitalWrite(PIN_LED_GREEN, LOW);    // Turn green LED off
 }
 
-// Play dash feedback: red LED + lower-pitch buzzer tone for the given duration
+// Play dash feedback: red LED + lower-pitch buzzer tone for the given duration.
+// NOTE: Uses delay(), so this is blocking while active.
 void signalDash(unsigned long durationMs) {
   digitalWrite(PIN_LED_RED, HIGH);     // Turn red LED on
   tone(PIN_BUZZER, DASH_TONE_HZ);      // Start lower-pitch dash tone
@@ -388,7 +390,7 @@ void updateLCD() {
       lcdPrint(1, slice);                                           // Show the slice on the bottom row
     }
   } else {
-    if (aiResponsePendingReveal && aiResponseLen > 0) {
+    if (aiResponsePendingReveal) {
       lcdPrint(1, "SEND=Show AI  ");                                 // Prompt user to reveal answer
     } else {
       lcdPrint(1, "              ");                                 // Clear the bottom row
@@ -543,7 +545,7 @@ void loop() {
   if (pressed(PIN_SEND, sendLastRaw, sendEdgeTime, sendHeld)) {
     Serial.println(F("SEND"));                          // Print to Serial Monitor
     if (morseLen > 0) finalizeCharacter();              // Decode any unfinished pattern first
-    if (wordLen == 0 && aiResponsePendingReveal && aiResponseLen > 0) {
+    if (wordLen == 0 && aiResponsePendingReveal) {
       showingAIResponse = true;                         // Reveal hidden AI response text
       aiResponsePendingReveal = false;                  // Reveal request fulfilled
       updateLCD();                                      // Refresh LCD immediately
