@@ -267,7 +267,7 @@ char decodeMorse(const char *pattern) {
 // during playback, which is acceptable because the user's job is to listen and decode.
 // Green LED = dot (short flash), Red LED = dash (long flash) unless toneOnly=true
 void playMorse(const char *text, bool toneOnly) {
-  if (toneOnly) lcdPrint(1, "              ");         // Keep AI decode-first playback text hidden
+  if (toneOnly) lcdPrint(1, "");                       // Keep AI decode-first playback text hidden
   else lcdPrint(1, "Listen!       ");                 // Show playback prompt on bottom row
   for (int i = 0; text[i] != '\0'; i++) {             // Go through each character in the text
     char c = (char)toupper((unsigned char)text[i]);   // Convert to uppercase
@@ -293,7 +293,7 @@ void playMorse(const char *text, bool toneOnly) {
     }
     // If the character wasn't found in the Morse table, it is simply skipped
   }
-  lcdPrint(1, "              ");                      // Clear the "Listen!" message when playback ends
+  lcdPrint(1, "");                                    // Clear the "Listen!" message when playback ends
 }
 
 // Decode the current Morse pattern into a letter and add it to the word
