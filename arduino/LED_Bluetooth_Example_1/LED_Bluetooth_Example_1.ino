@@ -56,7 +56,6 @@
 // Include the libraries we need
 #include <ArduinoBLE.h>          // For Bluetooth Low Energy communication
 #include <LiquidCrystal.h>       // For the parallel HD44780 LCD screen
-#include <stdio.h>               // For snprintf used in debug log formatting
 
 // --- Pin numbers ---
 // These tell the Arduino which pin each input and LED are on
@@ -82,7 +81,6 @@ const unsigned long DEBOUNCE_MS     = 50;   // Wait 50ms for button to stop boun
 const unsigned long CHAR_TIMEOUT_MS = 800;  // Wait 800ms of silence before decoding a letter
 const unsigned long LED_FLASH_MS    = 200;  // LED stays on for 200ms when it flashes
 const unsigned long LCD_SCROLL_MS   = 400;  // How often the LCD scrolls long text (every 400ms)
-const unsigned long KEYER_DOT_MAX_MS = 250; // Presses up to this duration are dots (tune for operator speed)
 const unsigned int  DOT_TONE_HZ      = 1200; // Dot beep pitch
 const unsigned int  DASH_TONE_HZ     = 700;  // Dash beep pitch (different so it is distinguishable)
 
