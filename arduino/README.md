@@ -124,6 +124,8 @@ The Raspberry Pi 3B connects to this peripheral as a BLE central using a library
 5. **Press SEND** to transmit the word to the Raspberry Pi via BLE (blue LED flash).  
    The LCD shows "SENDING…" then "SENT".  
 6. **Press ERASE** at any time to clear the current pattern and word buffer (red LED flash).
+7. **When an AI reply arrives**, it is played first as **buzzer-only Morse** (dot = higher tone, dash = lower tone).  
+   The LCD stays hidden so the user can decode first. If needed, press **SEND** with an empty word buffer to reveal the AI text on the LCD.
 
 ### Word spacing
 Pressing SEND after each word is the primary way to delimit words.  
