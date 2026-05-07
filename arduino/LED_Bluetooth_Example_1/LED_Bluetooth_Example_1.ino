@@ -351,12 +351,12 @@ void sendWord() {
   }
   Serial.print(F("Sending: ")); Serial.println(wordBuffer);        // Print the word to Serial Monitor
   statusChar.writeValue((uint8_t *)"SENDING", 7);                   // Tell Pi we are sending
-  lcdPrint(0, "Receive Wait..");                                    // Show receive row status on top row
+  lcdPrint(0, "Await Reply.. ");                                    // Show receive row status on top row
   lcdPrint(1, "Sending...    ");                                    // Show send status on bottom row
   wordChar.writeValue((uint8_t *)wordBuffer, (unsigned int)wordLen); // Send the word over BLE
   delay(200);                                                       // Short pause
   statusChar.writeValue((uint8_t *)"SENT", 4);                      // Tell Pi it was sent
-  lcdPrint(0, "Receive Wait..");                                    // Keep receive status on top row
+  lcdPrint(0, "Await Reply.. ");                                    // Keep receive status on top row
   lcdPrint(1, "Sent!         ");                                    // Update LCD bottom row
   delay(1500);                                                      // Wait so the user can read it
   eraseAll();                                                       // Clear everything ready for next word
