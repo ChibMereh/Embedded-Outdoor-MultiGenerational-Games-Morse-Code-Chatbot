@@ -351,12 +351,12 @@ void sendWord() {
   }
   Serial.print(F("Sending: ")); Serial.println(wordBuffer);        // Print the word to Serial Monitor
   statusChar.writeValue((uint8_t *)"SENDING", 7);                   // Tell Pi we are sending
-  lcdPrint(0, "Recv Waiting..");                                    // Show receive row status on top row
+  lcdPrint(0, "Receive Wait..");                                    // Show receive row status on top row
   lcdPrint(1, "Sending...    ");                                    // Show send status on bottom row
   wordChar.writeValue((uint8_t *)wordBuffer, (unsigned int)wordLen); // Send the word over BLE
   delay(200);                                                       // Short pause
   statusChar.writeValue((uint8_t *)"SENT", 4);                      // Tell Pi it was sent
-  lcdPrint(0, "Recv Waiting..");                                    // Keep receive status on top row
+  lcdPrint(0, "Receive Wait..");                                    // Keep receive status on top row
   lcdPrint(1, "Sent!         ");                                    // Update LCD bottom row
   delay(1500);                                                      // Wait so the user can read it
   eraseAll();                                                       // Clear everything ready for next word
@@ -378,7 +378,7 @@ void updateLCD() {
   } else if (aiResponsePendingReveal) {
     lcdPrint(0, "SEND=Show AI  ");                                  // Prompt user to reveal received answer
   } else if (bleConnected) {                                        // Connected but no reply visible yet
-    lcdPrint(0, "Recv Ready     ");                                 // Show receive row status
+    lcdPrint(0, "Receive Ready ");                                  // Show receive row status
   } else {                                                          // Not connected yet
     lcdPrint(0, "BLE Searching.");                                  // Show searching message
   }
@@ -426,7 +426,7 @@ void setup() {
 
   // Start the LCD screen
   lcd.begin(LCD_COLS, LCD_ROWS);     // Initialise the LCD with its column and row count
-  lcdPrint(0, "Recv Starting.");    // Show receive status on top row
+  lcdPrint(0, "Receive Start.");    // Show receive status on top row
   lcdPrint(1, "Send Starting.");    // Show send status on bottom row
 
   // Start Bluetooth (BLE)
@@ -459,7 +459,7 @@ void setup() {
   Serial.println(F("BLE advertising as MorseEncoder")); // Confirm in Serial Monitor
 
   // Show ready message and flash all three LEDs in sequence to show they work
-  lcdPrint(0, "Recv Ready     ");                      // Show receive row ready state
+  lcdPrint(0, "Receive Ready ");                      // Show receive row ready state
   lcdPrint(1, "Send Ready     ");                      // Show send row ready state
   playGreenFeedback();                                 // Flash green (DOT colour) to test it
   playRedFeedback();                                   // Flash red (DASH colour) to test it
