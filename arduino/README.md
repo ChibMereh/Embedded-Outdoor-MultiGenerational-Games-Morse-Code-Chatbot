@@ -118,7 +118,7 @@ The Raspberry Pi 3B connects to this peripheral as a BLE central using a library
    The current outgoing pattern is shown on the **bottom LCD line** in real time.  
 3. **After 800 ms of inactivity** the pattern is automatically decoded:  
    - Recognised character → appended to the **bottom LCD line** (green LED flash).  
-   - Unknown pattern → `? Unknown` on the **bottom LCD line** (red LED flash).  
+   - Unknown pattern → `? Unknown` on the **bottom LCD line** (red LED + lower buzzer tone).  
 4. **Repeat** steps 2–3 to build up a complete word.  
    Words longer than 14 characters scroll automatically on the bottom line.  
 5. **Press SEND** to transmit the word to the Raspberry Pi via BLE (blue LED flash).  

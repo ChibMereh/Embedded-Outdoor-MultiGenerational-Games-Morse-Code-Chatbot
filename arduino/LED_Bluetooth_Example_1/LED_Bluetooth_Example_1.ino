@@ -553,7 +553,7 @@ void loop() {
       aiResponsePendingReveal = false;                  // Reveal request fulfilled
       updateLCD();                                      // Refresh LCD immediately
     } else {
-      sendWord();                                       // Send word or keep existing empty-buffer behavior
+      sendWord();                                       // Send the queued word; if none is queued, keep the existing no-op behavior
     }
     playYellowFeedback();                               // Play YELLOW feedback to confirm SEND
   }
