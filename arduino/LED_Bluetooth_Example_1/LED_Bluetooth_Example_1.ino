@@ -210,14 +210,14 @@ void signalDash(unsigned long durationMs) {
 }
 
 // Play dot tone only (no LED), used for AI-response decode-first playback mode
-void toneDotOnly(unsigned long durationMs) {
+void playDotTone(unsigned long durationMs) {
   tone(PIN_BUZZER, DOT_TONE_HZ);       // Start higher-pitch dot tone
   delay(durationMs);                   // Hold for requested duration
   noTone(PIN_BUZZER);                  // Stop buzzer
 }
 
 // Play dash tone only (no LED), used for AI-response decode-first playback mode
-void toneDashOnly(unsigned long durationMs) {
+void playDashTone(unsigned long durationMs) {
   tone(PIN_BUZZER, DASH_TONE_HZ);      // Start lower-pitch dash tone
   delay(durationMs);                   // Hold for requested duration
   noTone(PIN_BUZZER);                  // Stop buzzer
@@ -280,10 +280,10 @@ void playMorse(const char *text, bool toneOnly) {
         for (int k = 0; MORSE[j].pat[k] != '\0'; k++) {  // Go through each dot/dash in the pattern
           if (k > 0) delay(ELEM_GAP);                 // Wait between dots/dashes (not before first one)
           if (MORSE[j].pat[k] == '.') {               // If this symbol is a dot
-            if (toneOnly) toneDotOnly(DOT_MS);        // Dot tone only
+            if (toneOnly) playDotTone(DOT_MS);        // Dot tone only
             else signalDot(DOT_MS);                   // Dot light+tone
           } else {                                    // Otherwise the symbol is a dash
-            if (toneOnly) toneDashOnly(DASH_MS);      // Dash tone only
+            if (toneOnly) playDashTone(DASH_MS);      // Dash tone only
             else signalDash(DASH_MS);                 // Dash light+tone
           }
         }
@@ -552,8 +552,12 @@ void loop() {
       showingAIResponse = true;                         // Reveal hidden AI response text
       aiResponsePendingReveal = false;                  // Reveal request fulfilled
       updateLCD();                                      // Refresh LCD immediately
+    } else if (wordLen == 0) {
+      lcdPrint(1, "Nothing to send");                   // Give explicit feedback for empty SEND
+      delay(800);                                       // Leave message visible briefly
+      updateLCD();                                      // Restore normal LCD layout
     } else {
-      sendWord();                                       // Send the queued word; if none is queued, keep the existing no-op behavior
+      sendWord();                                       // Send the queued word
     }
     playYellowFeedback();                               // Play YELLOW feedback to confirm SEND
   }
