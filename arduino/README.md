@@ -83,7 +83,7 @@ If you use a standard 16-column module, change `const int LCD_COLS = 14;` to `16
 
 ---
 
-## Arduino Libraries (install via Library Manager)
+## Arduino libraries (install via Library Manager)
 
 | Library | Author | Purpose |
 |---------|--------|---------|
@@ -92,7 +92,7 @@ If you use a standard 16-column module, change `const int LCD_COLS = 14;` to `16
 
 ---
 
-## BLE Service Layout
+## BLE service layout
 
 The sketch advertises a custom BLE peripheral named **"MorseEncoder"**.
 
@@ -109,7 +109,7 @@ The Raspberry Pi 3B connects to this peripheral as a BLE central using a library
 
 ---
 
-## How to Use
+## How to use
 
 1. **Power on** the Arduino — the LCD shows "Ready BLE OK" and the green LED flashes.  
 2. **Enter a character** using the iambic paddle:  
@@ -121,23 +121,23 @@ The Raspberry Pi 3B connects to this peripheral as a BLE central using a library
    - Unknown pattern → `? Unknown` on the **bottom LCD line** (red LED + lower buzzer tone).  
 4. **Repeat** steps 2–3 to build up a complete word.  
    Words longer than 14 characters scroll automatically on the bottom line.  
-5. **Press SEND** to transmit the word to the Raspberry Pi via BLE (blue LED flash).  
+5. **Press Send** to transmit the word to the Raspberry Pi via BLE (blue LED flash).  
    The send status appears on the **bottom line** while the **top line** remains reserved for receive-side status/replies.  
-6. **Press ERASE** at any time to clear the current pattern and word buffer (red LED flash).
+6. **Press Erase** at any time to clear the current pattern and word buffer (red LED flash).
 7. **When an AI reply arrives**, it is played first as **buzzer-only Morse** (dot = higher tone, dash = lower tone).  
-   The **top line** stays hidden so the user can decode first. If needed, press **SEND** with an empty word buffer to reveal the AI text on the **top line**.
+   The **top line** stays hidden so the user can decode first. If needed, press **Send** with an empty word buffer to reveal the AI text on the **top line**.
 
 ### LCD layout
 - **Top line** = received AI response and receive-side status prompts  
 - **Bottom line** = Arduino input, outgoing Morse pattern, and the word being sent
 
 ### Word spacing
-Pressing SEND after each word is the primary way to delimit words.  
+Pressing Send after each word is the primary way to delimit words.  
 Alternatively, entering the Morse sequence for `'/'` (dash · dot · dot · dash · dot = `"-..-."`) inserts a `/` character into the word buffer, which the Raspberry Pi side interprets as a word separator.
 
 ---
 
-## Serial Monitor (debug)
+## Serial monitor (debug)
 
 Open the Serial Monitor at **9600 baud** to see:
 
@@ -155,7 +155,7 @@ Open the Serial Monitor at **9600 baud** to see:
 
 ---
 
-## Morse Code Reference
+## Morse code reference
 
 ### Letters
 
