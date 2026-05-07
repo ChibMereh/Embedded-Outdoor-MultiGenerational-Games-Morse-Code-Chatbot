@@ -14,17 +14,17 @@ small LCD screen.
 │                                 │                          │                    │
 │  Keyer + ERASE/SEND buttons     │  wordChar (Notify) ───► │  ble_handler.py    │
 │  LCD 14×2 displays:             │                          │  morse_decoder.py  │
-│    • current Morse pattern      │ ◄─── responseChar (Write)│  OpenAI API        │
-│    • word being built           │                          │  main.py           │
-│    • AI response (reveal-on-send)│                         └────────────────────┘
+│    • top: received AI text      │ ◄─── responseChar (Write)│  OpenAI API        │
+│    • bottom: outgoing input     │                          │  main.py           │
+│    • decode-first reveal flow   │                          └────────────────────┘
 └─────────────────────────────────┘
 ```
 
 **Data flow:**
 
 1. User taps/holds a Morse keyer on the Arduino to build a Morse pattern.
-2. After 800 ms of inactivity the character is decoded and added to the word
-   buffer on the LCD.
+2. After 800 ms of inactivity the character is decoded and added to the
+   outgoing word buffer shown on the bottom LCD row.
 3. User presses **SEND** → the word is transmitted to the Pi via a BLE
    notification on `wordChar` (UUID `…def3`).
 4. The Pi accumulates words.  After `MESSAGE_TIMEOUT_S` seconds of silence
@@ -34,8 +34,8 @@ small LCD screen.
 6. The AI response is written back to the Arduino via `responseChar`
    (UUID `…def5`).
 7. The Arduino plays the response as buzzer-only Morse first (high tone = dot,
-   low tone = dash), then reveals the response on the LCD when the user presses
-   **SEND** with no pending word (decode-first workflow).
+   low tone = dash), then reveals the response on the top LCD row when the
+   user presses **SEND** with no pending word (decode-first workflow).
 
 ---
 
