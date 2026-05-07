@@ -132,7 +132,7 @@ The Raspberry Pi 3B connects to this peripheral as a BLE central using a library
 - **Bottom line** = Arduino input, outgoing Morse pattern, and the word being sent
 
 ### Word spacing
-Pressing Send after each word is the primary way to delimit words.  
+Pressing Send after each word is the primary way to separate words.  
 Alternatively, entering the Morse sequence for `'/'` (dash · dot · dot · dash · dot = `"-..-."`) inserts a `/` character into the word buffer, which the Raspberry Pi side interprets as a word separator.
 
 ---
