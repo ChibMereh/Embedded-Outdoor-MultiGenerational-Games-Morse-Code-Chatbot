@@ -163,7 +163,7 @@ The Pi will scan for the Arduino, connect automatically, and wait for words.
 | `56789abcdef1` | patternChar | Read, Notify | Current dot/dash pattern |
 | `56789abcdef2` | recognChar | Read, Notify | Most-recently decoded character |
 | `56789abcdef3` | wordChar | Read, Notify | Complete word (notified on Send) |
-| `56789abcdef4` | statusChar | Read, Notify | Status string (`ready` / `sending` / etc.) |
+| `56789abcdef4` | statusChar | Read, Notify | Status string (`READY` / `SENDING` / etc.) |
 | `56789abcdef5` | responseChar | **Write** | AI response written by the Pi |
 
 ---
