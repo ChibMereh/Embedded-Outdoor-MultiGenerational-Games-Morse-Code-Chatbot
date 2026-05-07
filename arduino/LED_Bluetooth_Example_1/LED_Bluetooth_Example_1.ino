@@ -7,8 +7,8 @@
  *   Pin 3 - DAH paddle  (TRRS Ring1 → D3, TRRS Sleeve → GND) — press always = DASH
  *   Pin 4 - ERASE button      (connect between pin and GND, uses INPUT_PULLUP)
  *   Pin 5 - SEND button       (connect between pin and GND, uses INPUT_PULLUP)
- *   Pin 6 - GREEN LED     (with 220 ohm resistor to GND) - flashes for dot (short press)
- *   Pin 7 - RED LED       (with 220 ohm resistor to GND) - flashes for dash (long press)
+ *   Pin 6 - GREEN LED     (with 220 ohm resistor to GND) - flashes for DIT/dot input
+ *   Pin 7 - RED LED       (with 220 ohm resistor to GND) - flashes for DAH/dash input
  *   Pin 8 - YELLOW LED    (with 220 ohm resistor to GND) - flashes for SEND and ERASE
  *   Pin 9 - PIEZO BUZZER  (signal pin to D9, other pin to GND) - beeps for dot/dash
  *   Standard HD44780 LCD 14x2 (parallel 4-bit mode, no I2C backpack needed)
@@ -81,8 +81,7 @@ const unsigned long DEBOUNCE_MS     = 50;   // Wait 50ms for button to stop boun
 const unsigned long CHAR_TIMEOUT_MS = 800;  // Wait 800ms of silence before decoding a letter
 const unsigned long LED_FLASH_MS    = 200;  // LED stays on for 200ms when it flashes
 const unsigned long LCD_SCROLL_MS   = 400;  // How often the LCD scrolls long text (every 400ms)
-// Dot/dash are selected by dedicated paddles (D2=DIT, D3=DAH), so no press-duration threshold is used.
-// Press durations are still tracked for debug logging only.
+// Dot/dash are selected by dedicated paddles (D2=DIT, D3=DAH); hold-time debug logging was removed.
 const unsigned int  DOT_TONE_HZ      = 1200; // Dot beep pitch
 const unsigned int  DASH_TONE_HZ     = 700;  // Dash beep pitch (different so it is distinguishable)
 
@@ -157,11 +156,9 @@ bool          aiResponsePendingReveal = false; // True when AI reply exists but 
 bool keyerLastRaw = HIGH;                 // Last raw reading from dit (dot) paddle
 unsigned long keyerEdgeTime = 0;          // Time when dit reading last changed
 bool keyerHeld = false;                   // True while dit paddle is pressed
-unsigned long keyerPressStart = 0;        // Time when current dit press started (debug timing)
 bool dahLastRaw = HIGH;                   // Last raw reading from dah (dash) paddle
 unsigned long dahEdgeTime = 0;            // Time when dah reading last changed
 bool dahHeld = false;                     // True while dah paddle is pressed
-unsigned long dahPressStart = 0;          // Time when current dah press started (debug timing)
 bool eraseLastRaw = HIGH;  unsigned long eraseEdgeTime = 0;  bool eraseHeld = false;  // ERASE button state
 bool sendLastRaw  = HIGH;  unsigned long sendEdgeTime  = 0;  bool sendHeld  = false;  // SEND button state
 
@@ -494,11 +491,9 @@ void loop() {
   if (millis() - keyerEdgeTime >= DEBOUNCE_MS) {        // stable long enough to trust state
     if (keyerRaw == LOW && !keyerHeld) {                // new press started
       keyerHeld = true;
-      keyerPressStart = millis();
     } else if (keyerRaw == HIGH && keyerHeld) {         // press just ended
       keyerHeld = false;
-      unsigned long pressMs = millis() - keyerPressStart;
-      Serial.print(F("[KEY] DOT paddle ")); Serial.println(pressMs);
+      Serial.println(F("[Key] Dot paddle"));
       if (morseLen < MAX_PATTERN - 1) {                 // Only add if pattern isn't full
         morsePattern[morseLen++] = '.';
         morsePattern[morseLen]   = '\0';
@@ -520,11 +515,9 @@ void loop() {
   if (millis() - dahEdgeTime >= DEBOUNCE_MS) {          // stable long enough to trust state
     if (dahRaw == LOW && !dahHeld) {                    // new press started
       dahHeld = true;
-      dahPressStart = millis();
     } else if (dahRaw == HIGH && dahHeld) {             // press just ended
       dahHeld = false;
-      unsigned long pressMs = millis() - dahPressStart;
-      Serial.print(F("[KEY] DASH paddle ")); Serial.println(pressMs);
+      Serial.println(F("[Key] Dash paddle"));
       if (morseLen < MAX_PATTERN - 1) {                 // Only add if pattern isn't full
         morsePattern[morseLen++] = '-';
         morsePattern[morseLen]   = '\0';

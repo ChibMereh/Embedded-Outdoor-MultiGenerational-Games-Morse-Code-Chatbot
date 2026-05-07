@@ -1,6 +1,6 @@
-# MORSE CODE DOCUMENTATION
+# Morse code documentation
 
-## Arduino Nano 33 BLE – Encoder Sketch
+## Arduino Nano 33 BLE encoder sketch
 
 The complete Arduino encoder sketch is located at:
 
@@ -16,7 +16,7 @@ See [`arduino/README.md`](arduino/README.md) for:
 - Complete Morse code reference table
 - Raspberry Pi 3B integration example (bleak / Python)
 
-## Morse Code Quick Reference
+## Morse code quick reference
 
 The encoder uses the International Morse Code standard (ITU-R M.1677-1).
 
@@ -26,7 +26,7 @@ The encoder uses the International Morse Code standard (ITU-R M.1677-1).
 | Dash    | `-`    | 3 units  |
 | Character gap (auto) | (pause) | 800 ms inactivity |
 
-### Common Letters
+### Common letters
 
 ```
 A .-     B -...   C -.-.   D -..    E .
