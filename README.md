@@ -1,6 +1,6 @@
 # Embedded Outdoor Multi-Generational Games — Morse Code Chatbot
 
-A Raspberry Pi 3B ↔ Arduino Nano 33 BLE chatbot that lets players send
+A Raspberry Pi 4 ↔ Arduino Nano 33 BLE chatbot that lets players send
 messages in Morse code and receive AI-generated replies, all displayed on a
 small LCD screen.
 
@@ -10,7 +10,7 @@ small LCD screen.
 
 ```
 ┌─────────────────────────────────┐        BLE GATT        ┌────────────────────┐
-│   Arduino Nano 33 BLE           │ ◄─────────────────────► │  Raspberry Pi 3B   │
+│   Arduino Nano 33 BLE           │ ◄─────────────────────► │  Raspberry Pi 4    │
 │                                 │                          │                    │
 │  Keyer + ERASE/SEND buttons     │  wordChar (Notify) ───► │  ble_handler.py    │
 │  LCD 14×2 displays:             │                          │  morse_decoder.py  │
@@ -50,11 +50,16 @@ small LCD screen.
 | SEND button | Pin 5 → GND, INPUT_PULLUP |
 | RGB LED | R=6, G=7, B=8 (220 Ω to GND each) |
 | Piezo buzzer | Signal=9, other leg to GND |
-| Raspberry Pi 3B | Runs the Python code in the repo root |
+| Raspberry Pi 4 | Runs the Python code in the repo root |
 
 ---
 
 ## Raspberry Pi setup
+
+### Recommended OS image
+
+- **Use:** Raspberry Pi OS Lite (64-bit), Bookworm
+- **Fallback:** 32-bit only if you need compatibility with a specific legacy dependency
 
 ### 1. Enable Bluetooth
 

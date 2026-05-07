@@ -14,7 +14,7 @@ See [`arduino/README.md`](arduino/README.md) for:
 - BLE service / characteristic layout
 - Usage instructions and Serial Monitor output
 - Complete Morse code reference table
-- Raspberry Pi 3B integration example (bleak / Python)
+- Raspberry Pi 4 integration example (bleak / Python)
 
 ## Morse code quick reference
 

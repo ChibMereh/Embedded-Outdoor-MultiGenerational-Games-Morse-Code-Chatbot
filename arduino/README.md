@@ -105,7 +105,7 @@ The sketch advertises a custom BLE peripheral named **"MorseEncoder"**.
 
 Full service UUID: `12345678-1234-5678-1234-56789abcdef0`
 
-The Raspberry Pi 3B connects to this peripheral as a BLE central using a library such as [bleak](https://github.com/hbldh/bleak) (Python) and subscribes to the characteristics above.
+The Raspberry Pi 4 connects to this peripheral as a BLE central using a library such as [bleak](https://github.com/hbldh/bleak) (Python) and subscribes to the characteristics above.
 
 ---
 
@@ -204,7 +204,7 @@ Open the Serial Monitor at **9600 baud** to see:
 
 ## Raspberry Pi Integration
 
-The Raspberry Pi 3B acts as the **BLE central**. Use Python with `bleak`:
+The Raspberry Pi 4 acts as the **BLE central**. Use Python with `bleak`:
 
 ```python
 import asyncio
