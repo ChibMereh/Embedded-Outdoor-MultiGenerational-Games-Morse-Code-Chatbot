@@ -14,17 +14,17 @@ small LCD screen.
 │                                 │                          │                    │
 │  Keyer + ERASE/SEND buttons     │  wordChar (Notify) ───► │  ble_handler.py    │
 │  LCD 14×2 displays:             │                          │  morse_decoder.py  │
-│    • current Morse pattern      │ ◄─── responseChar (Write)│  OpenAI API        │
-│    • word being built           │                          │  main.py           │
-│    • AI response (scrolling)    │                          └────────────────────┘
+│    • top: received AI text      │ ◄─── responseChar (Write)│  OpenAI API        │
+│    • bottom: outgoing input     │                          │  main.py           │
+│    • decode-first reveal flow   │                          └────────────────────┘
 └─────────────────────────────────┘
 ```
 
 **Data flow:**
 
 1. User taps/holds a Morse keyer on the Arduino to build a Morse pattern.
-2. After 800 ms of inactivity the character is decoded and added to the word
-   buffer on the LCD.
+2. After 800 ms of inactivity the character is decoded and added to the
+   outgoing word buffer shown on the bottom LCD row.
 3. User presses **SEND** → the word is transmitted to the Pi via a BLE
    notification on `wordChar` (UUID `…def3`).
 4. The Pi accumulates words.  After `MESSAGE_TIMEOUT_S` seconds of silence
@@ -33,7 +33,9 @@ small LCD screen.
    `SCENARIO_PROMPT` as the system message.
 6. The AI response is written back to the Arduino via `responseChar`
    (UUID `…def5`).
-7. The Arduino scrolls the response across LCD line 0.
+7. The Arduino plays the response as buzzer-only Morse first (high tone = dot,
+   low tone = dash), then reveals the response on the top LCD row when the
+   user presses **SEND** with no pending word (decode-first workflow).
 
 ---
 
@@ -47,6 +49,7 @@ small LCD screen.
 | ERASE button | Pin 4 → GND, INPUT_PULLUP |
 | SEND button | Pin 5 → GND, INPUT_PULLUP |
 | RGB LED | R=6, G=7, B=8 (220 Ω to GND each) |
+| Piezo buzzer | Signal=9, other leg to GND |
 | Raspberry Pi 3B | Runs the Python code in the repo root |
 
 ---

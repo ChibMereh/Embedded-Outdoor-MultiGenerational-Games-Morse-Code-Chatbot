@@ -10,6 +10,7 @@
  *   Pin 6 - GREEN LED     (with 220 ohm resistor to GND) - flashes for dot (short press)
  *   Pin 7 - RED LED       (with 220 ohm resistor to GND) - flashes for dash (long press)
  *   Pin 8 - YELLOW LED    (with 220 ohm resistor to GND) - flashes for SEND and ERASE
+ *   Pin 9 - PIEZO BUZZER  (signal pin to D9, other pin to GND) - beeps for dot/dash
  *   Standard HD44780 LCD 14x2 (parallel 4-bit mode, no I2C backpack needed)
  *     Pin A0 (RS) -> RS  pin on LCD
  *     Pin A1 (EN) -> EN  pin on LCD
@@ -40,8 +41,9 @@
  *      - YELLOW LED flashes to confirm
  *   4. Press ERASE to clear everything and start again
  *      - YELLOW LED flashes to confirm
- *   5. When the AI sends a reply, it plays as Morse on the LEDs
- *      (green = dot, red = dash) then scrolls as text on the LCD screen
+ *   5. When the AI sends a reply, it plays first as Morse on the buzzer only
+ *      (high tone = dot, low tone = dash). Press SEND (with no word queued)
+ *      to reveal the text on the LCD if needed.
  *
  * BLE (Bluetooth) service ID: 12345678-1234-5678-1234-56789abcdef0
  *   Channel def1 - current Morse pattern  (readable/notifiable)
@@ -54,7 +56,6 @@
 // Include the libraries we need
 #include <ArduinoBLE.h>          // For Bluetooth Low Energy communication
 #include <LiquidCrystal.h>       // For the parallel HD44780 LCD screen
-#include <stdio.h>               // For snprintf used in debug log formatting
 
 // --- Pin numbers ---
 // These tell the Arduino which pin each input and LED are on
@@ -65,6 +66,7 @@ const int PIN_SEND       = 5;  // SEND button connected to pin 5
 const int PIN_LED_GREEN  = 6;  // Green LED - flashes for DOT and successful decode (with 220 ohm resistor to GND)
 const int PIN_LED_RED    = 7;  // Red LED   - flashes for DASH and unknown patterns  (with 220 ohm resistor to GND)
 const int PIN_LED_YELLOW = 8;  // Yellow LED - flashes for SEND and ERASE            (with 220 ohm resistor to GND)
+const int PIN_BUZZER     = 9;  // Piezo buzzer signal pin (other leg to GND)
 
 // --- Parallel LCD pin numbers ---
 const int PIN_LCD_RS = A0;  // LCD Register Select pin
@@ -79,7 +81,10 @@ const unsigned long DEBOUNCE_MS     = 50;   // Wait 50ms for button to stop boun
 const unsigned long CHAR_TIMEOUT_MS = 800;  // Wait 800ms of silence before decoding a letter
 const unsigned long LED_FLASH_MS    = 200;  // LED stays on for 200ms when it flashes
 const unsigned long LCD_SCROLL_MS   = 400;  // How often the LCD scrolls long text (every 400ms)
-const unsigned long KEYER_DOT_MAX_MS = 250; // Presses up to this duration are dots (tune for operator speed)
+// Dot/dash are selected by dedicated paddles (D2=DIT, D3=DAH), so no press-duration threshold is used.
+// Press durations are still tracked for debug logging only.
+const unsigned int  DOT_TONE_HZ      = 1200; // Dot beep pitch
+const unsigned int  DASH_TONE_HZ     = 700;  // Dash beep pitch (different so it is distinguishable)
 
 // --- Morse playback speeds (for playing AI response as Morse on LED) ---
 const unsigned long DOT_MS    = 200;   // LED on time for a dot (short flash)
@@ -146,15 +151,17 @@ unsigned long lastScrollTime  = 0;             // When the word last scrolled
 int           aiScrollOffset  = 0;             // Which character the AI reply scroll starts from (row 1)
 unsigned long lastAIScrollTime = 0;            // When the AI reply last scrolled
 bool          showingAIResponse = false;       // Are we currently showing the AI reply on the LCD?
+bool          aiResponsePendingReveal = false; // True when AI reply exists but is intentionally hidden
 
 // --- Input debounce tracking ---
 bool keyerLastRaw = HIGH;                 // Last raw reading from dit (dot) paddle
 unsigned long keyerEdgeTime = 0;          // Time when dit reading last changed
 bool keyerHeld = false;                   // True while dit paddle is pressed
-unsigned long keyerPressStart = 0;        // Time when current dit press started
+unsigned long keyerPressStart = 0;        // Time when current dit press started (debug timing)
 bool dahLastRaw = HIGH;                   // Last raw reading from dah (dash) paddle
 unsigned long dahEdgeTime = 0;            // Time when dah reading last changed
 bool dahHeld = false;                     // True while dah paddle is pressed
+unsigned long dahPressStart = 0;          // Time when current dah press started (debug timing)
 bool eraseLastRaw = HIGH;  unsigned long eraseEdgeTime = 0;  bool eraseHeld = false;  // ERASE button state
 bool sendLastRaw  = HIGH;  unsigned long sendEdgeTime  = 0;  bool sendHeld  = false;  // SEND button state
 
@@ -182,22 +189,52 @@ bool pressed(int pin, bool &lastRaw, unsigned long &edgeTime, bool &held) {
   return false;                             // No new press detected
 }
 
-// Flash the GREEN LED on for LED_FLASH_MS milliseconds (used for DOT and successful decode)
-void flashGreen() {
-  digitalWrite(PIN_LED_GREEN, HIGH);  // Turn green LED on
-  delay(LED_FLASH_MS);                // Wait 200ms
-  digitalWrite(PIN_LED_GREEN, LOW);   // Turn green LED off
+// Play dot feedback: green LED + higher-pitch buzzer tone for the given duration.
+// NOTE: Uses delay(), so this is blocking while active.
+void signalDot(unsigned long durationMs) {
+  digitalWrite(PIN_LED_GREEN, HIGH);   // Turn green LED on
+  tone(PIN_BUZZER, DOT_TONE_HZ);       // Start higher-pitch dot tone
+  delay(durationMs);                   // Hold for requested duration
+  noTone(PIN_BUZZER);                  // Stop buzzer
+  digitalWrite(PIN_LED_GREEN, LOW);    // Turn green LED off
 }
 
-// Flash the RED LED on for LED_FLASH_MS milliseconds (used for DASH and unknown patterns)
-void flashRed() {
-  digitalWrite(PIN_LED_RED, HIGH);    // Turn red LED on
-  delay(LED_FLASH_MS);                // Wait 200ms
-  digitalWrite(PIN_LED_RED, LOW);     // Turn red LED off
+// Play dash feedback: red LED + lower-pitch buzzer tone for the given duration.
+// NOTE: Uses delay(), so this is blocking while active.
+void signalDash(unsigned long durationMs) {
+  digitalWrite(PIN_LED_RED, HIGH);     // Turn red LED on
+  tone(PIN_BUZZER, DASH_TONE_HZ);      // Start lower-pitch dash tone
+  delay(durationMs);                   // Hold for requested duration
+  noTone(PIN_BUZZER);                  // Stop buzzer
+  digitalWrite(PIN_LED_RED, LOW);      // Turn red LED off
 }
 
-// Flash the YELLOW LED on for LED_FLASH_MS milliseconds (used for SEND and ERASE)
-void flashYellow() {
+// Play dot tone only (no LED), used for AI-response decode-first playback mode
+void playDotTone(unsigned long durationMs) {
+  tone(PIN_BUZZER, DOT_TONE_HZ);       // Start higher-pitch dot tone
+  delay(durationMs);                   // Hold for requested duration
+  noTone(PIN_BUZZER);                  // Stop buzzer
+}
+
+// Play dash tone only (no LED), used for AI-response decode-first playback mode
+void playDashTone(unsigned long durationMs) {
+  tone(PIN_BUZZER, DASH_TONE_HZ);      // Start lower-pitch dash tone
+  delay(durationMs);                   // Hold for requested duration
+  noTone(PIN_BUZZER);                  // Stop buzzer
+}
+
+// Play green feedback for dot entry and successful decode
+void playGreenFeedback() {
+  signalDot(LED_FLASH_MS);            // Dot-style light+tone feedback
+}
+
+// Play red feedback for dash entry and decode errors
+void playRedFeedback() {
+  signalDash(LED_FLASH_MS);           // Dash-style light+tone feedback
+}
+
+// Play yellow feedback for SEND/ERASE and AI-reply arrival
+void playYellowFeedback() {
   digitalWrite(PIN_LED_YELLOW, HIGH); // Turn yellow LED on
   delay(LED_FLASH_MS);                // Wait 200ms
   digitalWrite(PIN_LED_YELLOW, LOW);  // Turn yellow LED off
@@ -228,9 +265,10 @@ char decodeMorse(const char *pattern) {
 // BLE events while it runs. For short messages this is a few seconds; for long AI responses
 // it can be 30+ seconds. This is an intentional simplification; the device appears unresponsive
 // during playback, which is acceptable because the user's job is to listen and decode.
-// Green LED = dot (short flash), Red LED = dash (long flash)
-void playMorse(const char *text) {
-  lcdPrint(1, "Listen!       ");                      // Show a message on the LCD bottom row
+// Green LED = dot (short flash), Red LED = dash (long flash) unless toneOnly=true
+void playMorse(const char *text, bool toneOnly) {
+  if (toneOnly) lcdPrint(0, "");                       // Keep AI decode-first playback text hidden
+  else lcdPrint(0, "Listen!       ");                 // Show playback prompt on top row
   for (int i = 0; text[i] != '\0'; i++) {             // Go through each character in the text
     char c = (char)toupper((unsigned char)text[i]);   // Convert to uppercase
     if (c == ' ' || c == '\n' || c == '\r') {         // If it's a space or line break
@@ -242,13 +280,11 @@ void playMorse(const char *text) {
         for (int k = 0; MORSE[j].pat[k] != '\0'; k++) {  // Go through each dot/dash in the pattern
           if (k > 0) delay(ELEM_GAP);                 // Wait between dots/dashes (not before first one)
           if (MORSE[j].pat[k] == '.') {               // If this symbol is a dot
-            digitalWrite(PIN_LED_GREEN, HIGH);        // Turn green LED on (dot = green)
-            delay(DOT_MS);                            // Keep it on for the dot duration
-            digitalWrite(PIN_LED_GREEN, LOW);         // Turn green LED off
+            if (toneOnly) playDotTone(DOT_MS);        // Dot tone only
+            else signalDot(DOT_MS);                   // Dot light+tone
           } else {                                    // Otherwise the symbol is a dash
-            digitalWrite(PIN_LED_RED, HIGH);          // Turn red LED on (dash = red)
-            delay(DASH_MS);                           // Keep it on for the dash duration
-            digitalWrite(PIN_LED_RED, LOW);           // Turn red LED off
+            if (toneOnly) playDashTone(DASH_MS);      // Dash tone only
+            else signalDash(DASH_MS);                 // Dash light+tone
           }
         }
         delay(CHAR_GAP);                              // Wait between letters
@@ -257,7 +293,7 @@ void playMorse(const char *text) {
     }
     // If the character wasn't found in the Morse table, it is simply skipped
   }
-  lcdPrint(1, "              ");                      // Clear the "Listen!" message when playback ends
+  lcdPrint(0, "");                                    // Clear the "Listen!" message when playback ends
 }
 
 // Decode the current Morse pattern into a letter and add it to the word
@@ -274,13 +310,13 @@ void finalizeCharacter() {
       wordBuffer[wordLen]   = '\0';                                 // Add the end-of-string marker
       wordChar.writeValue((uint8_t *)wordBuffer, (unsigned int)wordLen);  // Send updated word over BLE
     }
-    flashGreen();                                                     // Flash GREEN LED to show success
+    playGreenFeedback();                                              // Play GREEN feedback to show success
   } else {                                                          // Pattern not recognised
     Serial.print(F("Unknown pattern: ")); Serial.println(morsePattern);  // Print the bad pattern
     statusChar.writeValue((uint8_t *)"UNKNOWN", 7);                 // Tell the Pi it was unknown
-    lcdPrint(1, "? Unknown     ");                                  // Show on LCD
+    lcdPrint(1, "? Unknown     ");                                  // Show send-side error on bottom row
     delay(600);                                                     // Pause so user can see the message
-    flashRed();                                                     // Flash RED LED to show error
+    playRedFeedback();                                              // Play RED feedback to show error
   }
   morsePattern[0] = '\0';                                           // Clear the pattern (start fresh)
   morseLen = 0;                                                     // Reset pattern length to zero
@@ -297,13 +333,14 @@ void eraseAll() {
   scrollOffset  = 0;     lastScrollTime   = 0;                     // Reset word scroll position
   aiScrollOffset = 0;    lastAIScrollTime = 0;                      // Reset AI reply scroll position
   showingAIResponse = false;                                        // Hide any AI reply currently showing
+  aiResponsePendingReveal = false;                                  // Clear any pending AI reveal request
   patternChar.writeValue((uint8_t *)"", 0);                         // Tell Pi pattern is cleared
   recognChar .writeValue((uint8_t *)"", 0);                         // Tell Pi no letter
   wordChar   .writeValue((uint8_t *)"", 0);                         // Tell Pi word is cleared
   statusChar .writeValue((uint8_t *)"ERASED", 6);                   // Tell Pi status is ERASED
   Serial.println(F("Erased"));                                      // Print to Serial Monitor
-  lcdPrint(0, "Erased!       ");                                    // Show on LCD top row
-  lcdPrint(1, "              ");                                    // Clear LCD bottom row
+  lcdPrint(0, "");                                                  // Clear receive row
+  lcdPrint(1, "Erased!       ");                                    // Show erase confirmation on send row
 }
 
 // Send the current word over Bluetooth to the Raspberry Pi
@@ -314,12 +351,13 @@ void sendWord() {
   }
   Serial.print(F("Sending: ")); Serial.println(wordBuffer);        // Print the word to Serial Monitor
   statusChar.writeValue((uint8_t *)"SENDING", 7);                   // Tell Pi we are sending
-  lcdPrint(0, wordBuffer);                                          // Show the word on LCD top row
-  lcdPrint(1, "SENDING...    ");                                    // Show status on LCD bottom row
+  lcdPrint(0, "Await Reply.. ");                                    // Show receive row status on top row
+  lcdPrint(1, "Sending...    ");                                    // Show send status on bottom row
   wordChar.writeValue((uint8_t *)wordBuffer, (unsigned int)wordLen); // Send the word over BLE
   delay(200);                                                       // Short pause
   statusChar.writeValue((uint8_t *)"SENT", 4);                      // Tell Pi it was sent
-  lcdPrint(1, "SENT!         ");                                    // Update LCD bottom row
+  lcdPrint(0, "Await Reply.. ");                                    // Keep receive status on top row
+  lcdPrint(1, "Sent!         ");                                    // Update LCD bottom row
   delay(1500);                                                      // Wait so the user can read it
   eraseAll();                                                       // Clear everything ready for next word
   statusChar.writeValue((uint8_t *)"READY", 5);                     // Tell Pi we are ready again
@@ -328,33 +366,38 @@ void sendWord() {
 // Update the LCD screen to show the current state
 void updateLCD() {
   lcd.clear();                                                      // Clear the whole screen
-  if (morseLen > 0) {                                               // If the user is entering dots/dashes
-    lcdPrint(0, morsePattern);                                      // Show the pattern on top row
-  } else if (wordLen > 0) {                                         // If there's a word being built
-    if (wordLen <= LCD_COLS) {                                      // Word fits on screen all at once
-      lcdPrint(0, wordBuffer);                                      // Show the whole word
-    } else {                                                        // Word is too long - show a scrolling slice
-      char slice[LCD_COLS + 1];                                     // Temporary buffer for the visible part
-      strncpy(slice, wordBuffer + scrollOffset, LCD_COLS);          // Copy the visible section
-      slice[LCD_COLS] = '\0';                                       // Add end-of-string marker
-      lcdPrint(0, slice);                                           // Show the slice on the top row
-    }
-  } else if (bleConnected) {                                        // Connected but nothing typed yet
-    lcdPrint(0, "BLE Connected ");                                  // Show connection status
-  } else {                                                          // Not connected yet
-    lcdPrint(0, "BLE Searching.");                                  // Show searching message
-  }
   if (showingAIResponse && aiResponseLen > 0) {                     // If an AI reply should be shown
     if (aiResponseLen <= LCD_COLS) {                                // Reply fits on one screen
-      lcdPrint(1, aiResponse);                                      // Show the whole reply
+      lcdPrint(0, aiResponse);                                      // Show the whole reply on top row
     } else {                                                        // Reply is long - show current scroll position
       char slice[LCD_COLS + 1];                                     // Temporary buffer for the visible part
       strncpy(slice, aiResponse + aiScrollOffset, LCD_COLS);        // Copy the visible section
       slice[LCD_COLS] = '\0';                                       // Add end-of-string marker
+      lcdPrint(0, slice);                                           // Show the slice on the top row
+    }
+  } else if (aiResponsePendingReveal) {
+    lcdPrint(0, "SEND=Show AI  ");                                  // Prompt user to reveal received answer
+  } else if (bleConnected) {                                        // Connected but no reply visible yet
+    lcdPrint(0, "Receive Ready ");                                  // Show receive row status
+  } else {                                                          // Not connected yet
+    lcdPrint(0, "BLE Searching.");                                  // Show searching message
+  }
+
+  if (morseLen > 0) {                                               // If the user is entering dots/dashes
+    lcdPrint(1, morsePattern);                                      // Show the pattern on bottom row
+  } else if (wordLen > 0) {                                         // If there's a word being built
+    if (wordLen <= LCD_COLS) {                                      // Word fits on screen all at once
+      lcdPrint(1, wordBuffer);                                      // Show the whole word on bottom row
+    } else {                                                        // Word is too long - show a scrolling slice
+      char slice[LCD_COLS + 1];                                     // Temporary buffer for the visible part
+      strncpy(slice, wordBuffer + scrollOffset, LCD_COLS);          // Copy the visible section
+      slice[LCD_COLS] = '\0';                                       // Add end-of-string marker
       lcdPrint(1, slice);                                           // Show the slice on the bottom row
     }
+  } else if (bleConnected) {                                        // Connected but nothing typed yet
+    lcdPrint(1, "Send Ready     ");                                 // Show send row status
   } else {
-    lcdPrint(1, "              ");                                   // Clear the bottom row
+    lcdPrint(1, "");                                                // Clear the bottom row
   }
 }
 
@@ -375,20 +418,22 @@ void setup() {
   pinMode(PIN_LED_GREEN,  OUTPUT);   // Green LED pin
   pinMode(PIN_LED_RED,    OUTPUT);   // Red LED pin
   pinMode(PIN_LED_YELLOW, OUTPUT);   // Yellow LED pin
+  pinMode(PIN_BUZZER,     OUTPUT);   // Piezo buzzer pin
   digitalWrite(PIN_LED_GREEN,  LOW); // Make sure green LED starts off
   digitalWrite(PIN_LED_RED,    LOW); // Make sure red LED starts off
   digitalWrite(PIN_LED_YELLOW, LOW); // Make sure yellow LED starts off
+  noTone(PIN_BUZZER);                 // Make sure buzzer starts silent
 
   // Start the LCD screen
   lcd.begin(LCD_COLS, LCD_ROWS);     // Initialise the LCD with its column and row count
-  lcdPrint(0, "Morse Encoder ");    // Show welcome text on top row
-  lcdPrint(1, "BLE Starting..");    // Show status on bottom row
+  lcdPrint(0, "Receive Start.");    // Show receive status on top row
+  lcdPrint(1, "Send Starting.");    // Show send status on bottom row
 
   // Start Bluetooth (BLE)
   if (!BLE.begin()) {                                   // Try to start BLE
     Serial.println(F("BLE init failed"));              // Print error if it fails
     lcdPrint(0, "BLE INIT FAIL ");                     // Show error on LCD
-    while (true) { flashRed(); delay(500); }           // Flash red LED forever and stop here
+    while (true) { playRedFeedback(); delay(500); }    // Flash red LED forever and stop here
   }
 
   // Set up BLE service (what this device is called and what data it shares)
@@ -414,11 +459,11 @@ void setup() {
   Serial.println(F("BLE advertising as MorseEncoder")); // Confirm in Serial Monitor
 
   // Show ready message and flash all three LEDs in sequence to show they work
-  lcdPrint(0, "Ready BLE OK  ");                       // Show ready on LCD top row
-  lcdPrint(1, "Key Erase Send");                       // Show control names on LCD bottom row
-  flashGreen();                                        // Flash green (DOT colour) to test it
-  flashRed();                                          // Flash red (DASH colour) to test it
-  flashYellow();                                       // Flash yellow (SEND/ERASE colour) to test it
+  lcdPrint(0, "Receive Ready ");                      // Show receive row ready state
+  lcdPrint(1, "Send Ready     ");                      // Show send row ready state
+  playGreenFeedback();                                 // Flash green (DOT colour) to test it
+  playRedFeedback();                                   // Flash red (DASH colour) to test it
+  playYellowFeedback();                                // Flash yellow (SEND/ERASE colour) to test it
   delay(1500);                                         // Wait 1.5 seconds so user can read the LCD
   updateLCD();                                         // Switch to normal display
 }
@@ -453,18 +498,16 @@ void loop() {
     } else if (keyerRaw == HIGH && keyerHeld) {         // press just ended
       keyerHeld = false;
       unsigned long pressMs = millis() - keyerPressStart;
-      char keyLog[48];
-      snprintf(keyLog, sizeof(keyLog), "[KEY] DOT %lu", pressMs);
-      Serial.println(keyLog);
+      Serial.print(F("[KEY] DOT paddle ")); Serial.println(pressMs);
       if (morseLen < MAX_PATTERN - 1) {                 // Only add if pattern isn't full
         morsePattern[morseLen++] = '.';
         morsePattern[morseLen]   = '\0';
         lastInputTime = millis();
         inputOccurred = true;
         patternChar.writeValue((uint8_t *)morsePattern, (unsigned int)morseLen);
-        lcdPrint(0, morsePattern);
+        lcdPrint(1, morsePattern);
       }
-      flashGreen();                                     // Green LED = dot
+      playGreenFeedback();                              // Green LED = dot
     }
   }
 
@@ -477,18 +520,20 @@ void loop() {
   if (millis() - dahEdgeTime >= DEBOUNCE_MS) {          // stable long enough to trust state
     if (dahRaw == LOW && !dahHeld) {                    // new press started
       dahHeld = true;
+      dahPressStart = millis();
     } else if (dahRaw == HIGH && dahHeld) {             // press just ended
       dahHeld = false;
-      Serial.println(F("[KEY] DASH paddle"));
+      unsigned long pressMs = millis() - dahPressStart;
+      Serial.print(F("[KEY] DASH paddle ")); Serial.println(pressMs);
       if (morseLen < MAX_PATTERN - 1) {                 // Only add if pattern isn't full
         morsePattern[morseLen++] = '-';
         morsePattern[morseLen]   = '\0';
         lastInputTime = millis();
         inputOccurred = true;
         patternChar.writeValue((uint8_t *)morsePattern, (unsigned int)morseLen);
-        lcdPrint(0, morsePattern);
+        lcdPrint(1, morsePattern);
       }
-      flashRed();                                       // Red LED = dash
+      playRedFeedback();                                // Red LED = dash
     }
   }
 
@@ -496,15 +541,25 @@ void loop() {
   if (pressed(PIN_ERASE, eraseLastRaw, eraseEdgeTime, eraseHeld)) {
     Serial.println(F("ERASE"));                         // Print to Serial Monitor
     eraseAll();                                         // Clear the pattern and word
-    flashYellow();                                      // Flash YELLOW LED to confirm ERASE
+    playYellowFeedback();                               // Play YELLOW feedback to confirm ERASE
   }
 
   // Check if the SEND button was pressed
   if (pressed(PIN_SEND, sendLastRaw, sendEdgeTime, sendHeld)) {
     Serial.println(F("SEND"));                          // Print to Serial Monitor
     if (morseLen > 0) finalizeCharacter();              // Decode any unfinished pattern first
-    sendWord();                                         // Send the word over Bluetooth
-    flashYellow();                                      // Flash YELLOW LED to confirm SEND
+    if (wordLen == 0 && aiResponsePendingReveal) {
+      showingAIResponse = true;                         // Reveal hidden AI response text
+      aiResponsePendingReveal = false;                  // Reveal request fulfilled
+      updateLCD();                                      // Refresh LCD immediately
+    } else if (wordLen == 0) {
+      lcdPrint(1, "Nothing to send");                   // Give explicit feedback for empty SEND
+      delay(800);                                       // Leave message visible briefly
+      updateLCD();                                      // Restore normal LCD layout
+    } else {
+      sendWord();                                       // Send the queued word
+    }
+    playYellowFeedback();                               // Play YELLOW feedback to confirm SEND
   }
 
   // Auto-decode: if the user has entered a pattern and stopped for 800ms, decode it automatically
@@ -512,17 +567,17 @@ void loop() {
     finalizeCharacter();                                // Decode the pattern into a letter
   }
 
-  // Scroll long words on the top row of the LCD (only runs when word is wider than the screen)
+  // Scroll long outgoing words on the bottom row of the LCD
   if (wordLen > LCD_COLS && millis() - lastScrollTime >= LCD_SCROLL_MS) {
     lastScrollTime = millis();                          // Record the scroll time
     if (++scrollOffset > wordLen - LCD_COLS) scrollOffset = 0;  // Advance scroll, wrap around after showing all characters
     char slice[LCD_COLS + 1];                           // Temporary buffer for the visible portion
     strncpy(slice, wordBuffer + scrollOffset, LCD_COLS); // Copy the visible section of the word
     slice[LCD_COLS] = '\0';                             // Add end-of-string marker
-    lcdPrint(0, slice);                                 // Show the scrolled portion on the top row
+    lcdPrint(1, slice);                                 // Show the scrolled portion on the bottom row
   }
 
-  // Scroll the AI reply on the bottom row of the LCD (only runs when reply is wider than the screen)
+  // Scroll the AI reply on the top row of the LCD
   if (showingAIResponse && aiResponseLen > LCD_COLS &&
       millis() - lastAIScrollTime >= LCD_SCROLL_MS) {
     lastAIScrollTime = millis();                        // Record the scroll time
@@ -530,7 +585,7 @@ void loop() {
     char slice[LCD_COLS + 1];                           // Temporary buffer for the visible portion
     strncpy(slice, aiResponse + aiScrollOffset, LCD_COLS);  // Copy the visible section of the reply
     slice[LCD_COLS] = '\0';                             // Add end-of-string marker
-    lcdPrint(1, slice);                                 // Show the scrolled portion on the bottom row
+    lcdPrint(0, slice);                                 // Show the scrolled portion on the top row
   }
 
   // Check if the Raspberry Pi has sent us an AI reply over Bluetooth
@@ -542,11 +597,11 @@ void loop() {
     aiResponseLen   = len;                                         // Save the length
     aiScrollOffset  = 0;                                           // Start scrolling from the beginning
     lastAIScrollTime = millis();                                   // Reset the scroll timer
-    showingAIResponse = false;                                     // Hide text until Morse playback is done
+    showingAIResponse = false;                                     // Keep text hidden until user requests reveal
+    aiResponsePendingReveal = true;                                // Mark hidden reply waiting to be revealed
     Serial.print(F("AI response received: ")); Serial.println(aiResponse);  // Print to Serial Monitor
-    flashYellow();                                                 // Flash YELLOW LED to show reply arrived
-    playMorse(aiResponse);                                         // Play the reply as Morse code (blocking - device unresponsive until done)
-    showingAIResponse = true;                                      // Now reveal the text on the LCD
-    updateLCD();                                                   // Refresh the LCD to show the reply
+    playYellowFeedback();                                          // Play YELLOW feedback to show reply arrived
+    playMorse(aiResponse, true);                                   // Play reply as buzzer-only Morse first
+    updateLCD();                                                   // Prompt "SEND=Show AI" until user reveals
   }
 }

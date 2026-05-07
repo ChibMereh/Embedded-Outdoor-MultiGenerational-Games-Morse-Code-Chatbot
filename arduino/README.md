@@ -46,6 +46,14 @@ Connect one leg to the Arduino pin and the other leg directly to GND — no exte
 
 Typical wiring: each channel → 220 Ω resistor → LED anode; LED cathode → GND.
 
+### Piezo buzzer
+
+| Pin | Function |
+|-----|----------|
+| D9  | Piezo buzzer output (dot = higher tone, dash = lower tone) |
+
+Wire the buzzer signal leg to **D9** and the other leg to **GND**.
+
 ### LCD (HD44780 — parallel 4-bit mode, no I2C backpack)
 
 The sketch drives the LCD directly in **4-bit parallel mode** using the built-in `LiquidCrystal` library.
@@ -105,17 +113,23 @@ The Raspberry Pi 3B connects to this peripheral as a BLE central using a library
 
 1. **Power on** the Arduino — the LCD shows "Ready BLE OK" and the green LED flashes.  
 2. **Enter a character** using the iambic paddle:  
-   - Press **DIT paddle** (Tip → D2) = dot (`.`) — green LED flashes  
-   - Press **DAH paddle** (Ring1 → D3) = dash (`-`) — red LED flashes  
-   The current pattern is shown on **LCD line 1** in real time.  
+   - Press **DIT paddle** (Tip → D2) = dot (`.`) — green LED flashes + higher buzzer tone  
+   - Press **DAH paddle** (Ring1 → D3) = dash (`-`) — red LED flashes + lower buzzer tone  
+   The current outgoing pattern is shown on the **bottom LCD line** in real time.  
 3. **After 800 ms of inactivity** the pattern is automatically decoded:  
-   - Recognised character → appended to **LCD line 2** (green LED flash).  
-   - Unknown pattern → "? Unknown" on line 2 (orange LED flash).  
+   - Recognised character → appended to the **bottom LCD line** (green LED flash).  
+   - Unknown pattern → `? Unknown` on the **bottom LCD line** (red LED + lower buzzer tone).  
 4. **Repeat** steps 2–3 to build up a complete word.  
-   Words longer than 14 characters scroll automatically on line 2.  
+   Words longer than 14 characters scroll automatically on the bottom line.  
 5. **Press SEND** to transmit the word to the Raspberry Pi via BLE (blue LED flash).  
-   The LCD shows "SENDING…" then "SENT".  
+   The send status appears on the **bottom line** while the **top line** remains reserved for receive-side status/replies.  
 6. **Press ERASE** at any time to clear the current pattern and word buffer (red LED flash).
+7. **When an AI reply arrives**, it is played first as **buzzer-only Morse** (dot = higher tone, dash = lower tone).  
+   The **top line** stays hidden so the user can decode first. If needed, press **SEND** with an empty word buffer to reveal the AI text on the **top line**.
+
+### LCD layout
+- **Top line** = received AI response and receive-side status prompts  
+- **Bottom line** = Arduino input, outgoing Morse pattern, and the word being sent
 
 ### Word spacing
 Pressing SEND after each word is the primary way to delimit words.  
