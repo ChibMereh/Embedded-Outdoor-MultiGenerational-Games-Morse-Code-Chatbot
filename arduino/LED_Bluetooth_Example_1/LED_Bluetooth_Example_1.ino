@@ -104,7 +104,7 @@ const int maxResponseBytes = 160;  // Maximum length of AI reply (must match ble
 struct MorseEntry { char ch; const char *pat; };  // ch = the letter, pat = the Morse code
 
 // The complete Morse code alphabet (letters, digits, punctuation)
-const MorseEntry morseTable[] = {
+const MorseEntry morse[] = {
   {'A',".-"},    {'B',"-..."},  {'C',"-.-."}, {'D',"-.."}, {'E',"."},
   {'F',"..-."},  {'G',"--."},   {'H',"...."},  {'I',".."},  {'J',".---"},
   {'K',"-.-"},   {'L',".-.."},  {'M',"--"},    {'N',"-."},  {'O',"---"},
@@ -119,7 +119,7 @@ const MorseEntry morseTable[] = {
   {'+', ".-.-."}, {'-', "-....-"}, {'_', "..--.-"}, {'"', ".-..-."},
   {'$', "...-..-"}, {'@', ".--.-."}
 };
-const int morseSize = sizeof(morseTable) / sizeof(morseTable[0]);  // How many entries are in the table
+const int morseSize = sizeof(morse) / sizeof(morse[0]);  // How many entries are in the table
 
 // --- Bluetooth (BLE) setup ---
 // A BLE service groups related "characteristics" (like channels) together
@@ -250,8 +250,8 @@ void lcdPrint(int row, const char *s) {
 // Returns '\0' (empty) if no match is found
 char decodeMorse(const char *pattern) {
   for (int i = 0; i < morseSize; i++) {             // Go through every entry in the Morse table
-    if (strcmp(pattern, morseTable[i].pat) == 0) {        // If the pattern matches this entry
-      return morseTable[i].ch;                            // Return the letter
+    if (strcmp(pattern, morse[i].pat) == 0) {        // If the pattern matches this entry
+      return morse[i].ch;                            // Return the letter
     }
   }
   return '\0';                                       // Pattern not found - return empty
@@ -273,10 +273,10 @@ void playMorse(const char *text, bool toneOnly) {
       continue;                                       // Move on to the next character
     }
     for (int j = 0; j < morseSize; j++) {            // Search the Morse table for this letter
-      if (morseTable[j].ch == c) {                         // Found the letter in the table
-        for (int k = 0; morseTable[j].pat[k] != '\0'; k++) {  // Go through each dot/dash in the pattern
+      if (morse[j].ch == c) {                         // Found the letter in the table
+        for (int k = 0; morse[j].pat[k] != '\0'; k++) {  // Go through each dot/dash in the pattern
           if (k > 0) delay(elemGap);                 // Wait between dots/dashes (not before first one)
-          if (morseTable[j].pat[k] == '.') {               // If this symbol is a dot
+          if (morse[j].pat[k] == '.') {               // If this symbol is a dot
             if (toneOnly) playDotTone(dotMs);        // Dot tone only
             else signalDot(dotMs);                   // Dot light+tone
           } else {                                    // Otherwise the symbol is a dash

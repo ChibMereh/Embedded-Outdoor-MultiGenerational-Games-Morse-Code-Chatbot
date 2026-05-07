@@ -128,7 +128,7 @@ const int lcdCols         = 14;  // Display width (columns)
 const int lcdRows         = 2;   // Display height (rows)
 
 // ============================================================
-// morseTable CODE LIBRARY  (PROGMEM – flash storage)
+// MORSE CODE LIBRARY  (PROGMEM – flash storage)
 //
 // Two parallel arrays:
 //   MORSE_CHARS    – the printable character each pattern maps to
