@@ -59,52 +59,52 @@
 
 // --- Pin numbers ---
 // These tell the Arduino which pin each input and LED are on
-const int PIN_KEYER      = 2;  // DIT (dot) paddle – TRRS Tip → D2, Sleeve → GND
-const int PIN_KEYER_DAH  = 3;  // DAH (dash) paddle – TRRS Ring1 → D3, Sleeve → GND
-const int PIN_ERASE      = 4;  // ERASE button connected to pin 4
-const int PIN_SEND       = 5;  // SEND button connected to pin 5
-const int PIN_LED_GREEN  = 6;  // Green LED - flashes for DOT and successful decode (with 220 ohm resistor to GND)
-const int PIN_LED_RED    = 7;  // Red LED   - flashes for DASH and unknown patterns  (with 220 ohm resistor to GND)
-const int PIN_LED_YELLOW = 8;  // Yellow LED - flashes for SEND and ERASE            (with 220 ohm resistor to GND)
-const int PIN_BUZZER     = 9;  // Piezo buzzer signal pin (other leg to GND)
+const int pinKeyer      = 2;  // DIT (dot) paddle – TRRS Tip → D2, Sleeve → GND
+const int pinKeyerDah  = 3;  // DAH (dash) paddle – TRRS Ring1 → D3, Sleeve → GND
+const int pinErase      = 4;  // ERASE button connected to pin 4
+const int pinSend       = 5;  // SEND button connected to pin 5
+const int pinLedGreen  = 6;  // Green LED - flashes for DOT and successful decode (with 220 ohm resistor to GND)
+const int pinLedRed    = 7;  // Red LED   - flashes for DASH and unknown patterns  (with 220 ohm resistor to GND)
+const int pinLedYellow = 8;  // Yellow LED - flashes for SEND and ERASE            (with 220 ohm resistor to GND)
+const int pinBuzzer     = 9;  // Piezo buzzer signal pin (other leg to GND)
 
 // --- Parallel LCD pin numbers ---
-const int PIN_LCD_RS = A0;  // LCD Register Select pin
-const int PIN_LCD_EN = A1;  // LCD Enable pin
-const int PIN_LCD_D4 = A2;  // LCD data pin 4
-const int PIN_LCD_D5 = A3;  // LCD data pin 5
-const int PIN_LCD_D6 = A4;  // LCD data pin 6
-const int PIN_LCD_D7 = A5;  // LCD data pin 7
+const int pinLcdRs = A0;  // LCD Register Select pin
+const int pinLcdEn = A1;  // LCD Enable pin
+const int pinLcdD4 = A2;  // LCD data pin 4
+const int pinLcdD5 = A3;  // LCD data pin 5
+const int pinLcdD6 = A4;  // LCD data pin 6
+const int pinLcdD7 = A5;  // LCD data pin 7
 
 // --- Timing values (all in milliseconds) ---
-const unsigned long DEBOUNCE_MS     = 50;   // Wait 50ms for button to stop bouncing
-const unsigned long CHAR_TIMEOUT_MS = 800;  // Wait 800ms of silence before decoding a letter
-const unsigned long LED_FLASH_MS    = 200;  // LED stays on for 200ms when it flashes
-const unsigned long LCD_SCROLL_MS   = 400;  // How often the LCD scrolls long text (every 400ms)
+const unsigned long debounceMs     = 50;   // Wait 50ms for button to stop bouncing
+const unsigned long charTimeoutMs = 800;  // Wait 800ms of silence before decoding a letter
+const unsigned long ledFlashMs    = 200;  // LED stays on for 200ms when it flashes
+const unsigned long lcdScrollMs   = 400;  // How often the LCD scrolls long text (every 400ms)
 // Dot/dash are selected by dedicated paddles (D2=DIT, D3=DAH); hold-time debug logging was removed.
-const unsigned int  DOT_TONE_HZ      = 1200; // Dot beep pitch
-const unsigned int  DASH_TONE_HZ     = 700;  // Dash beep pitch (different so it is distinguishable)
+const unsigned int  dotToneHz      = 1200; // Dot beep pitch
+const unsigned int  dashToneHz     = 700;  // Dash beep pitch (different so it is distinguishable)
 
 // --- Morse playback speeds (for playing AI response as Morse on LED) ---
-const unsigned long DOT_MS    = 200;   // LED on time for a dot (short flash)
-const unsigned long DASH_MS   = 600;   // LED on time for a dash (long flash)
-const unsigned long ELEM_GAP  = 200;   // Gap between dots/dashes within one letter
-const unsigned long CHAR_GAP  = 600;   // Gap between letters
-const unsigned long WORD_GAP  = 1400;  // Gap between words
+const unsigned long dotMs    = 200;   // LED on time for a dot (short flash)
+const unsigned long dashMs   = 600;   // LED on time for a dash (long flash)
+const unsigned long elemGap  = 200;   // Gap between dots/dashes within one letter
+const unsigned long charGap  = 600;   // Gap between letters
+const unsigned long wordGap  = 1400;  // Gap between words
 
 // --- Size limits ---
-const int MAX_PATTERN        = 8;    // Longest Morse pattern is 7 symbols (e.g. "...-..-") + 1 for end marker
-const int MAX_WORD           = 50;   // Maximum number of letters in a word
-const int LCD_COLS           = 14;   // LCD screen has 14 columns
-const int LCD_ROWS           = 2;    // LCD screen has 2 rows
-const int MAX_RESPONSE_BYTES = 160;  // Maximum length of AI reply (must match ble_handler.py)
+const int maxPattern        = 8;    // Longest Morse pattern is 7 symbols (e.g. "...-..-") + 1 for end marker
+const int maxWord           = 50;   // Maximum number of letters in a word
+const int lcdCols           = 14;   // LCD screen has 14 columns
+const int lcdRows           = 2;    // LCD screen has 2 rows
+const int maxResponseBytes = 160;  // Maximum length of AI reply (must match ble_handler.py)
 
 // --- Morse code table ---
 // Each entry stores one letter and its Morse code pattern
 struct MorseEntry { char ch; const char *pat; };  // ch = the letter, pat = the Morse code
 
 // The complete Morse code alphabet (letters, digits, punctuation)
-const MorseEntry MORSE[] = {
+const MorseEntry morseTable[] = {
   {'A',".-"},    {'B',"-..."},  {'C',"-.-."}, {'D',"-.."}, {'E',"."},
   {'F',"..-."},  {'G',"--."},   {'H',"...."},  {'I',".."},  {'J',".---"},
   {'K',"-.-"},   {'L',".-.."},  {'M',"--"},    {'N',"-."},  {'O',"---"},
@@ -119,7 +119,7 @@ const MorseEntry MORSE[] = {
   {'+', ".-.-."}, {'-', "-....-"}, {'_', "..--.-"}, {'"', ".-..-."},
   {'$', "...-..-"}, {'@', ".--.-."}
 };
-const int MORSE_SIZE = sizeof(MORSE) / sizeof(MORSE[0]);  // How many entries are in the table
+const int morseSize = sizeof(morseTable) / sizeof(morseTable[0]);  // How many entries are in the table
 
 // --- Bluetooth (BLE) setup ---
 // A BLE service groups related "characteristics" (like channels) together
@@ -128,28 +128,28 @@ BLECharacteristic patternChar ("12345678-1234-5678-1234-56789abcdef1", BLERead|B
 BLECharacteristic recognChar  ("12345678-1234-5678-1234-56789abcdef2", BLERead|BLENotify,   2);  // Channel to send the decoded letter
 BLECharacteristic wordChar    ("12345678-1234-5678-1234-56789abcdef3", BLERead|BLENotify,  51);  // Channel to send the full word
 BLECharacteristic statusChar  ("12345678-1234-5678-1234-56789abcdef4", BLERead|BLENotify,  17);  // Channel to send status messages
-BLECharacteristic responseChar("12345678-1234-5678-1234-56789abcdef5", BLEWrite, MAX_RESPONSE_BYTES + 1);  // Channel to receive AI reply from Pi
+BLECharacteristic responseChar("12345678-1234-5678-1234-56789abcdef5", BLEWrite, maxResponseBytes + 1);  // Channel to receive AI reply from Pi
 
 // --- LCD object ---
-LiquidCrystal lcd(PIN_LCD_RS, PIN_LCD_EN, PIN_LCD_D4, PIN_LCD_D5, PIN_LCD_D6, PIN_LCD_D7);  // Create LCD object using parallel 4-bit mode
+LiquidCrystal lcd(pinLcdRs, pinLcdEn, pinLcdD4, pinLcdD5, pinLcdD6, pinLcdD7);  // Create LCD object using parallel 4-bit mode
 
 // --- Variables to remember current state ---
-char          morsePattern[MAX_PATTERN] = "";  // The dots and dashes typed so far (e.g. ".-")
+char          morsePattern[maxPattern] = "";  // The dots and dashes typed so far (e.g. ".-")
 int           morseLen    = 0;                 // How many symbols are in morsePattern
-char          wordBuffer[MAX_WORD + 1]  = "";  // The letters decoded so far (e.g. "HELLO")
+char          wordBuffer[maxWord + 1]  = "";  // The letters decoded so far (e.g. "HELLO")
 int           wordLen     = 0;                 // How many letters are in wordBuffer
 unsigned long lastInputTime  = 0;              // When the last button was pressed (in ms since power on)
 bool          inputOccurred  = false;          // True once the first button press has happened (avoids millis()==0 edge case)
 bool          bleConnected   = false;          // Is the Bluetooth connection active?
-char          aiResponse[MAX_RESPONSE_BYTES + 2] = "";  // The AI reply text (stored when it arrives)
+char          aiResponse[maxResponseBytes + 2] = "";  // The AI reply text (stored when it arrives)
 int           aiResponseLen  = 0;              // How long the AI reply is
 
 // --- Scroll state for long text on the LCD ---
 int           scrollOffset    = 0;             // Which character the word scroll starts from (row 0)
 unsigned long lastScrollTime  = 0;             // When the word last scrolled
 int           aiScrollOffset  = 0;             // Which character the AI reply scroll starts from (row 1)
-unsigned long lastAIScrollTime = 0;            // When the AI reply last scrolled
-bool          showingAIResponse = false;       // Are we currently showing the AI reply on the LCD?
+unsigned long lastAiScrollTime = 0;            // When the AI reply last scrolled
+bool          showingAiResponse = false;       // Are we currently showing the AI reply on the LCD?
 bool          aiResponsePendingReveal = false; // True when AI reply exists but is intentionally hidden
 
 // --- Input debounce tracking ---
@@ -176,7 +176,7 @@ bool pressed(int pin, bool &lastRaw, unsigned long &edgeTime, bool &held) {
     edgeTime = millis();                    // Record when it changed
     lastRaw = raw;                          // Save the new reading
   }
-  if (millis() - edgeTime >= DEBOUNCE_MS) { // If the reading has been stable for 50ms
+  if (millis() - edgeTime >= debounceMs) { // If the reading has been stable for 50ms
     if (raw == LOW && !held) {              // If button is pressed and we haven't counted it yet
       held = true;                          // Mark that we've counted this press
       return true;                          // Tell the caller a press happened
@@ -189,69 +189,69 @@ bool pressed(int pin, bool &lastRaw, unsigned long &edgeTime, bool &held) {
 // Play dot feedback: green LED + higher-pitch buzzer tone for the given duration.
 // NOTE: Uses delay(), so this is blocking while active.
 void signalDot(unsigned long durationMs) {
-  digitalWrite(PIN_LED_GREEN, HIGH);   // Turn green LED on
-  tone(PIN_BUZZER, DOT_TONE_HZ);       // Start higher-pitch dot tone
+  digitalWrite(pinLedGreen, HIGH);   // Turn green LED on
+  tone(pinBuzzer, dotToneHz);       // Start higher-pitch dot tone
   delay(durationMs);                   // Hold for requested duration
-  noTone(PIN_BUZZER);                  // Stop buzzer
-  digitalWrite(PIN_LED_GREEN, LOW);    // Turn green LED off
+  noTone(pinBuzzer);                  // Stop buzzer
+  digitalWrite(pinLedGreen, LOW);    // Turn green LED off
 }
 
 // Play dash feedback: red LED + lower-pitch buzzer tone for the given duration.
 // NOTE: Uses delay(), so this is blocking while active.
 void signalDash(unsigned long durationMs) {
-  digitalWrite(PIN_LED_RED, HIGH);     // Turn red LED on
-  tone(PIN_BUZZER, DASH_TONE_HZ);      // Start lower-pitch dash tone
+  digitalWrite(pinLedRed, HIGH);     // Turn red LED on
+  tone(pinBuzzer, dashToneHz);      // Start lower-pitch dash tone
   delay(durationMs);                   // Hold for requested duration
-  noTone(PIN_BUZZER);                  // Stop buzzer
-  digitalWrite(PIN_LED_RED, LOW);      // Turn red LED off
+  noTone(pinBuzzer);                  // Stop buzzer
+  digitalWrite(pinLedRed, LOW);      // Turn red LED off
 }
 
 // Play dot tone only (no LED), used for AI-response decode-first playback mode
 void playDotTone(unsigned long durationMs) {
-  tone(PIN_BUZZER, DOT_TONE_HZ);       // Start higher-pitch dot tone
+  tone(pinBuzzer, dotToneHz);       // Start higher-pitch dot tone
   delay(durationMs);                   // Hold for requested duration
-  noTone(PIN_BUZZER);                  // Stop buzzer
+  noTone(pinBuzzer);                  // Stop buzzer
 }
 
 // Play dash tone only (no LED), used for AI-response decode-first playback mode
 void playDashTone(unsigned long durationMs) {
-  tone(PIN_BUZZER, DASH_TONE_HZ);      // Start lower-pitch dash tone
+  tone(pinBuzzer, dashToneHz);      // Start lower-pitch dash tone
   delay(durationMs);                   // Hold for requested duration
-  noTone(PIN_BUZZER);                  // Stop buzzer
+  noTone(pinBuzzer);                  // Stop buzzer
 }
 
 // Play green feedback for dot entry and successful decode
 void playGreenFeedback() {
-  signalDot(LED_FLASH_MS);            // Dot-style light+tone feedback
+  signalDot(ledFlashMs);            // Dot-style light+tone feedback
 }
 
 // Play red feedback for dash entry and decode errors
 void playRedFeedback() {
-  signalDash(LED_FLASH_MS);           // Dash-style light+tone feedback
+  signalDash(ledFlashMs);           // Dash-style light+tone feedback
 }
 
 // Play yellow feedback for SEND/ERASE and AI-reply arrival
 void playYellowFeedback() {
-  digitalWrite(PIN_LED_YELLOW, HIGH); // Turn yellow LED on
-  delay(LED_FLASH_MS);                // Wait 200ms
-  digitalWrite(PIN_LED_YELLOW, LOW);  // Turn yellow LED off
+  digitalWrite(pinLedYellow, HIGH); // Turn yellow LED on
+  delay(ledFlashMs);                // Wait 200ms
+  digitalWrite(pinLedYellow, LOW);  // Turn yellow LED off
 }
 
 // Print text on one row of the LCD, padding with spaces to fill the whole row
 void lcdPrint(int row, const char *s) {
   lcd.setCursor(0, row);          // Move cursor to the start of the row
   int n = strlen(s);              // Find out how long the text is
-  if (n > LCD_COLS) n = LCD_COLS; // If text is too long, cut it off at the screen edge
+  if (n > lcdCols) n = lcdCols; // If text is too long, cut it off at the screen edge
   for (int i = 0; i < n; i++) lcd.print(s[i]);        // Print each character of the text
-  for (int i = n; i < LCD_COLS; i++) lcd.print(' ');   // Fill the rest of the row with spaces
+  for (int i = n; i < lcdCols; i++) lcd.print(' ');   // Fill the rest of the row with spaces
 }
 
 // Look up which letter matches a Morse pattern (e.g. ".-" returns 'A')
 // Returns '\0' (empty) if no match is found
 char decodeMorse(const char *pattern) {
-  for (int i = 0; i < MORSE_SIZE; i++) {             // Go through every entry in the Morse table
-    if (strcmp(pattern, MORSE[i].pat) == 0) {        // If the pattern matches this entry
-      return MORSE[i].ch;                            // Return the letter
+  for (int i = 0; i < morseSize; i++) {             // Go through every entry in the Morse table
+    if (strcmp(pattern, morseTable[i].pat) == 0) {        // If the pattern matches this entry
+      return morseTable[i].ch;                            // Return the letter
     }
   }
   return '\0';                                       // Pattern not found - return empty
@@ -269,22 +269,22 @@ void playMorse(const char *text, bool toneOnly) {
   for (int i = 0; text[i] != '\0'; i++) {             // Go through each character in the text
     char c = (char)toupper((unsigned char)text[i]);   // Convert to uppercase
     if (c == ' ' || c == '\n' || c == '\r') {         // If it's a space or line break
-      delay(WORD_GAP);                                // Wait for the word gap
+      delay(wordGap);                                // Wait for the word gap
       continue;                                       // Move on to the next character
     }
-    for (int j = 0; j < MORSE_SIZE; j++) {            // Search the Morse table for this letter
-      if (MORSE[j].ch == c) {                         // Found the letter in the table
-        for (int k = 0; MORSE[j].pat[k] != '\0'; k++) {  // Go through each dot/dash in the pattern
-          if (k > 0) delay(ELEM_GAP);                 // Wait between dots/dashes (not before first one)
-          if (MORSE[j].pat[k] == '.') {               // If this symbol is a dot
-            if (toneOnly) playDotTone(DOT_MS);        // Dot tone only
-            else signalDot(DOT_MS);                   // Dot light+tone
+    for (int j = 0; j < morseSize; j++) {            // Search the Morse table for this letter
+      if (morseTable[j].ch == c) {                         // Found the letter in the table
+        for (int k = 0; morseTable[j].pat[k] != '\0'; k++) {  // Go through each dot/dash in the pattern
+          if (k > 0) delay(elemGap);                 // Wait between dots/dashes (not before first one)
+          if (morseTable[j].pat[k] == '.') {               // If this symbol is a dot
+            if (toneOnly) playDotTone(dotMs);        // Dot tone only
+            else signalDot(dotMs);                   // Dot light+tone
           } else {                                    // Otherwise the symbol is a dash
-            if (toneOnly) playDashTone(DASH_MS);      // Dash tone only
-            else signalDash(DASH_MS);                 // Dash light+tone
+            if (toneOnly) playDashTone(dashMs);      // Dash tone only
+            else signalDash(dashMs);                 // Dash light+tone
           }
         }
-        delay(CHAR_GAP);                              // Wait between letters
+        delay(charGap);                              // Wait between letters
         break;                                        // Stop searching - we already found the letter
       }
     }
@@ -302,7 +302,7 @@ void finalizeCharacter() {
     Serial.print(F(" = ")); Serial.println(ch);                     // Print the letter
     char s[2] = {ch, '\0'};                                         // Make a 1-character string
     recognChar.writeValue((uint8_t *)s, 1);                         // Send the letter over BLE
-    if (wordLen < MAX_WORD) {                                       // If the word isn't too long yet
+    if (wordLen < maxWord) {                                       // If the word isn't too long yet
       wordBuffer[wordLen++] = ch;                                   // Add the letter to the word
       wordBuffer[wordLen]   = '\0';                                 // Add the end-of-string marker
       wordChar.writeValue((uint8_t *)wordBuffer, (unsigned int)wordLen);  // Send updated word over BLE
@@ -328,8 +328,8 @@ void eraseAll() {
   wordBuffer[0]   = '\0'; wordLen  = 0;                             // Clear the word
   lastInputTime = 0;      inputOccurred = false;                    // Reset inactivity timer and input flag
   scrollOffset  = 0;     lastScrollTime   = 0;                     // Reset word scroll position
-  aiScrollOffset = 0;    lastAIScrollTime = 0;                      // Reset AI reply scroll position
-  showingAIResponse = false;                                        // Hide any AI reply currently showing
+  aiScrollOffset = 0;    lastAiScrollTime = 0;                      // Reset AI reply scroll position
+  showingAiResponse = false;                                        // Hide any AI reply currently showing
   aiResponsePendingReveal = false;                                  // Clear any pending AI reveal request
   patternChar.writeValue((uint8_t *)"", 0);                         // Tell Pi pattern is cleared
   recognChar .writeValue((uint8_t *)"", 0);                         // Tell Pi no letter
@@ -363,13 +363,13 @@ void sendWord() {
 // Update the LCD screen to show the current state
 void updateLCD() {
   lcd.clear();                                                      // Clear the whole screen
-  if (showingAIResponse && aiResponseLen > 0) {                     // If an AI reply should be shown
-    if (aiResponseLen <= LCD_COLS) {                                // Reply fits on one screen
+  if (showingAiResponse && aiResponseLen > 0) {                     // If an AI reply should be shown
+    if (aiResponseLen <= lcdCols) {                                // Reply fits on one screen
       lcdPrint(0, aiResponse);                                      // Show the whole reply on top row
     } else {                                                        // Reply is long - show current scroll position
-      char slice[LCD_COLS + 1];                                     // Temporary buffer for the visible part
-      strncpy(slice, aiResponse + aiScrollOffset, LCD_COLS);        // Copy the visible section
-      slice[LCD_COLS] = '\0';                                       // Add end-of-string marker
+      char slice[lcdCols + 1];                                     // Temporary buffer for the visible part
+      strncpy(slice, aiResponse + aiScrollOffset, lcdCols);        // Copy the visible section
+      slice[lcdCols] = '\0';                                       // Add end-of-string marker
       lcdPrint(0, slice);                                           // Show the slice on the top row
     }
   } else if (aiResponsePendingReveal) {
@@ -383,12 +383,12 @@ void updateLCD() {
   if (morseLen > 0) {                                               // If the user is entering dots/dashes
     lcdPrint(1, morsePattern);                                      // Show the pattern on bottom row
   } else if (wordLen > 0) {                                         // If there's a word being built
-    if (wordLen <= LCD_COLS) {                                      // Word fits on screen all at once
+    if (wordLen <= lcdCols) {                                      // Word fits on screen all at once
       lcdPrint(1, wordBuffer);                                      // Show the whole word on bottom row
     } else {                                                        // Word is too long - show a scrolling slice
-      char slice[LCD_COLS + 1];                                     // Temporary buffer for the visible part
-      strncpy(slice, wordBuffer + scrollOffset, LCD_COLS);          // Copy the visible section
-      slice[LCD_COLS] = '\0';                                       // Add end-of-string marker
+      char slice[lcdCols + 1];                                     // Temporary buffer for the visible part
+      strncpy(slice, wordBuffer + scrollOffset, lcdCols);          // Copy the visible section
+      slice[lcdCols] = '\0';                                       // Add end-of-string marker
       lcdPrint(1, slice);                                           // Show the slice on the bottom row
     }
   } else if (bleConnected) {                                        // Connected but nothing typed yet
@@ -406,23 +406,23 @@ void setup() {
 
   // Set the input pins as inputs with built-in pull-up resistors
   // (INPUT_PULLUP means the pin reads HIGH normally and LOW when the button is pressed)
-  pinMode(PIN_KEYER,     INPUT_PULLUP);  // DIT (dot) paddle input pin
-  pinMode(PIN_KEYER_DAH, INPUT_PULLUP);  // DAH (dash) paddle input pin
-  pinMode(PIN_ERASE,     INPUT_PULLUP);  // ERASE button pin
-  pinMode(PIN_SEND,      INPUT_PULLUP);  // SEND button pin
+  pinMode(pinKeyer,     INPUT_PULLUP);  // DIT (dot) paddle input pin
+  pinMode(pinKeyerDah, INPUT_PULLUP);  // DAH (dash) paddle input pin
+  pinMode(pinErase,     INPUT_PULLUP);  // ERASE button pin
+  pinMode(pinSend,      INPUT_PULLUP);  // SEND button pin
 
   // Set the LED pins as outputs so we can turn them on and off
-  pinMode(PIN_LED_GREEN,  OUTPUT);   // Green LED pin
-  pinMode(PIN_LED_RED,    OUTPUT);   // Red LED pin
-  pinMode(PIN_LED_YELLOW, OUTPUT);   // Yellow LED pin
-  pinMode(PIN_BUZZER,     OUTPUT);   // Piezo buzzer pin
-  digitalWrite(PIN_LED_GREEN,  LOW); // Make sure green LED starts off
-  digitalWrite(PIN_LED_RED,    LOW); // Make sure red LED starts off
-  digitalWrite(PIN_LED_YELLOW, LOW); // Make sure yellow LED starts off
-  noTone(PIN_BUZZER);                 // Make sure buzzer starts silent
+  pinMode(pinLedGreen,  OUTPUT);   // Green LED pin
+  pinMode(pinLedRed,    OUTPUT);   // Red LED pin
+  pinMode(pinLedYellow, OUTPUT);   // Yellow LED pin
+  pinMode(pinBuzzer,     OUTPUT);   // Piezo buzzer pin
+  digitalWrite(pinLedGreen,  LOW); // Make sure green LED starts off
+  digitalWrite(pinLedRed,    LOW); // Make sure red LED starts off
+  digitalWrite(pinLedYellow, LOW); // Make sure yellow LED starts off
+  noTone(pinBuzzer);                 // Make sure buzzer starts silent
 
   // Start the LCD screen
-  lcd.begin(LCD_COLS, LCD_ROWS);     // Initialise the LCD with its column and row count
+  lcd.begin(lcdCols, lcdRows);     // Initialise the LCD with its column and row count
   lcdPrint(0, "Receive Start.");    // Show receive status on top row
   lcdPrint(1, "Send Starting.");    // Show send status on bottom row
 
@@ -483,18 +483,18 @@ void loop() {
   }
 
   // Check DIT (dot) paddle — pressing the dit paddle always records a DOT
-  bool keyerRaw = digitalRead(PIN_KEYER);               // LOW = pressed, HIGH = released
+  bool keyerRaw = digitalRead(pinKeyer);               // LOW = pressed, HIGH = released
   if (keyerRaw != keyerLastRaw) {                       // state changed, start debounce timer
     keyerEdgeTime = millis();
     keyerLastRaw = keyerRaw;
   }
-  if (millis() - keyerEdgeTime >= DEBOUNCE_MS) {        // stable long enough to trust state
+  if (millis() - keyerEdgeTime >= debounceMs) {        // stable long enough to trust state
     if (keyerRaw == LOW && !keyerHeld) {                // new press started
       keyerHeld = true;
     } else if (keyerRaw == HIGH && keyerHeld) {         // press just ended
       keyerHeld = false;
       Serial.println(F("[Key] Dot paddle"));
-      if (morseLen < MAX_PATTERN - 1) {                 // Only add if pattern isn't full
+      if (morseLen < maxPattern - 1) {                 // Only add if pattern isn't full
         morsePattern[morseLen++] = '.';
         morsePattern[morseLen]   = '\0';
         lastInputTime = millis();
@@ -507,18 +507,18 @@ void loop() {
   }
 
   // Check DAH (dash) paddle — pressing the dah paddle always records a DASH
-  bool dahRaw = digitalRead(PIN_KEYER_DAH);             // LOW = pressed, HIGH = released
+  bool dahRaw = digitalRead(pinKeyerDah);             // LOW = pressed, HIGH = released
   if (dahRaw != dahLastRaw) {                           // state changed, start debounce timer
     dahEdgeTime = millis();
     dahLastRaw = dahRaw;
   }
-  if (millis() - dahEdgeTime >= DEBOUNCE_MS) {          // stable long enough to trust state
+  if (millis() - dahEdgeTime >= debounceMs) {          // stable long enough to trust state
     if (dahRaw == LOW && !dahHeld) {                    // new press started
       dahHeld = true;
     } else if (dahRaw == HIGH && dahHeld) {             // press just ended
       dahHeld = false;
       Serial.println(F("[Key] Dash paddle"));
-      if (morseLen < MAX_PATTERN - 1) {                 // Only add if pattern isn't full
+      if (morseLen < maxPattern - 1) {                 // Only add if pattern isn't full
         morsePattern[morseLen++] = '-';
         morsePattern[morseLen]   = '\0';
         lastInputTime = millis();
@@ -531,18 +531,18 @@ void loop() {
   }
 
   // Check if the ERASE button was pressed
-  if (pressed(PIN_ERASE, eraseLastRaw, eraseEdgeTime, eraseHeld)) {
+  if (pressed(pinErase, eraseLastRaw, eraseEdgeTime, eraseHeld)) {
     Serial.println(F("ERASE"));                         // Print to Serial Monitor
     eraseAll();                                         // Clear the pattern and word
     playYellowFeedback();                               // Play YELLOW feedback to confirm ERASE
   }
 
   // Check if the SEND button was pressed
-  if (pressed(PIN_SEND, sendLastRaw, sendEdgeTime, sendHeld)) {
+  if (pressed(pinSend, sendLastRaw, sendEdgeTime, sendHeld)) {
     Serial.println(F("SEND"));                          // Print to Serial Monitor
     if (morseLen > 0) finalizeCharacter();              // Decode any unfinished pattern first
     if (wordLen == 0 && aiResponsePendingReveal) {
-      showingAIResponse = true;                         // Reveal hidden AI response text
+      showingAiResponse = true;                         // Reveal hidden AI response text
       aiResponsePendingReveal = false;                  // Reveal request fulfilled
       updateLCD();                                      // Refresh LCD immediately
     } else if (wordLen == 0) {
@@ -556,41 +556,41 @@ void loop() {
   }
 
   // Auto-decode: if the user has entered a pattern and stopped for 800ms, decode it automatically
-  if (morseLen > 0 && inputOccurred && millis() - lastInputTime >= CHAR_TIMEOUT_MS) {
+  if (morseLen > 0 && inputOccurred && millis() - lastInputTime >= charTimeoutMs) {
     finalizeCharacter();                                // Decode the pattern into a letter
   }
 
   // Scroll long outgoing words on the bottom row of the LCD
-  if (wordLen > LCD_COLS && millis() - lastScrollTime >= LCD_SCROLL_MS) {
+  if (wordLen > lcdCols && millis() - lastScrollTime >= lcdScrollMs) {
     lastScrollTime = millis();                          // Record the scroll time
-    if (++scrollOffset > wordLen - LCD_COLS) scrollOffset = 0;  // Advance scroll, wrap around after showing all characters
-    char slice[LCD_COLS + 1];                           // Temporary buffer for the visible portion
-    strncpy(slice, wordBuffer + scrollOffset, LCD_COLS); // Copy the visible section of the word
-    slice[LCD_COLS] = '\0';                             // Add end-of-string marker
+    if (++scrollOffset > wordLen - lcdCols) scrollOffset = 0;  // Advance scroll, wrap around after showing all characters
+    char slice[lcdCols + 1];                           // Temporary buffer for the visible portion
+    strncpy(slice, wordBuffer + scrollOffset, lcdCols); // Copy the visible section of the word
+    slice[lcdCols] = '\0';                             // Add end-of-string marker
     lcdPrint(1, slice);                                 // Show the scrolled portion on the bottom row
   }
 
   // Scroll the AI reply on the top row of the LCD
-  if (showingAIResponse && aiResponseLen > LCD_COLS &&
-      millis() - lastAIScrollTime >= LCD_SCROLL_MS) {
-    lastAIScrollTime = millis();                        // Record the scroll time
-    if (++aiScrollOffset > aiResponseLen - LCD_COLS) aiScrollOffset = 0;  // Advance scroll, wrap around after showing all characters
-    char slice[LCD_COLS + 1];                           // Temporary buffer for the visible portion
-    strncpy(slice, aiResponse + aiScrollOffset, LCD_COLS);  // Copy the visible section of the reply
-    slice[LCD_COLS] = '\0';                             // Add end-of-string marker
+  if (showingAiResponse && aiResponseLen > lcdCols &&
+      millis() - lastAiScrollTime >= lcdScrollMs) {
+    lastAiScrollTime = millis();                        // Record the scroll time
+    if (++aiScrollOffset > aiResponseLen - lcdCols) aiScrollOffset = 0;  // Advance scroll, wrap around after showing all characters
+    char slice[lcdCols + 1];                           // Temporary buffer for the visible portion
+    strncpy(slice, aiResponse + aiScrollOffset, lcdCols);  // Copy the visible section of the reply
+    slice[lcdCols] = '\0';                             // Add end-of-string marker
     lcdPrint(0, slice);                                 // Show the scrolled portion on the top row
   }
 
   // Check if the Raspberry Pi has sent us an AI reply over Bluetooth
   if (responseChar.written()) {                                    // If a reply has arrived
     int len = (int)responseChar.valueLength();                     // Get the length of the reply
-    if (len > MAX_RESPONSE_BYTES) len = MAX_RESPONSE_BYTES;        // Cap it at the maximum size
+    if (len > maxResponseBytes) len = maxResponseBytes;        // Cap it at the maximum size
     memcpy(aiResponse, responseChar.value(), len);                 // Copy the reply text
     aiResponse[len] = '\0';                                        // Add end-of-string marker
     aiResponseLen   = len;                                         // Save the length
     aiScrollOffset  = 0;                                           // Start scrolling from the beginning
-    lastAIScrollTime = millis();                                   // Reset the scroll timer
-    showingAIResponse = false;                                     // Keep text hidden until user requests reveal
+    lastAiScrollTime = millis();                                   // Reset the scroll timer
+    showingAiResponse = false;                                     // Keep text hidden until user requests reveal
     aiResponsePendingReveal = true;                                // Mark hidden reply waiting to be revealed
     Serial.print(F("AI response received: ")); Serial.println(aiResponse);  // Print to Serial Monitor
     playYellowFeedback();                                          // Play YELLOW feedback to show reply arrived

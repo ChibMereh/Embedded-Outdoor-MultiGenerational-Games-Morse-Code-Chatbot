@@ -104,8 +104,8 @@
 // ============================================================
 const int PIN_DOT   = 2;   // Dot   button
 const int PIN_DASH  = 3;   // Dash  button
-const int PIN_ERASE = 4;   // Erase button
-const int PIN_SEND  = 5;   // Send  button
+const int pinErase = 4;   // Erase button
+const int pinSend  = 5;   // Send  button
 
 const int PIN_LED_R = 6;   // RGB LED – red   channel
 const int PIN_LED_G = 7;   // RGB LED – green channel
@@ -114,21 +114,21 @@ const int PIN_LED_B = 8;   // RGB LED – blue  channel
 // ============================================================
 // TIMING CONSTANTS  (milliseconds)
 // ============================================================
-const unsigned long DEBOUNCE_MS     = 50;   // Button debounce window
-const unsigned long CHAR_TIMEOUT_MS = 800;  // Auto-finalise after inactivity
-const unsigned long LED_FLASH_MS    = 120;  // LED flash duration
-const unsigned long LCD_SCROLL_MS   = 400;  // Word-scroll interval on LCD
+const unsigned long debounceMs     = 50;   // Button debounce window
+const unsigned long charTimeoutMs = 800;  // Auto-finalise after inactivity
+const unsigned long ledFlashMs    = 120;  // LED flash duration
+const unsigned long lcdScrollMs   = 400;  // Word-scroll interval on LCD
 
 // ============================================================
 // BUFFER SIZES
 // ============================================================
 const int MAX_PATTERN_LEN  = 8;   // Max dots/dashes per character (7 + NUL)
 const int MAX_WORD_LEN     = 50;  // Max characters in the word buffer
-const int LCD_COLS         = 14;  // Display width (columns)
-const int LCD_ROWS         = 2;   // Display height (rows)
+const int lcdCols         = 14;  // Display width (columns)
+const int lcdRows         = 2;   // Display height (rows)
 
 // ============================================================
-// MORSE CODE LIBRARY  (PROGMEM – flash storage)
+// morseTable CODE LIBRARY  (PROGMEM – flash storage)
 //
 // Two parallel arrays:
 //   MORSE_CHARS    – the printable character each pattern maps to
@@ -241,7 +241,7 @@ BLECharacteristic statusChar   (BLE_CHAR_STATUS_UUID,  BLERead | BLENotify, 17);
 // ============================================================
 // LCD  (I2C address 0x27 – change to 0x3F if blank)
 // ============================================================
-LiquidCrystal_I2C lcd(0x27, LCD_COLS, LCD_ROWS);
+LiquidCrystal_I2C lcd(0x27, lcdCols, lcdRows);
 
 // ============================================================
 // APPLICATION STATE
@@ -310,8 +310,8 @@ void setup() {
   /* --- Button pins (INPUT_PULLUP: HIGH = released, LOW = pressed) --- */
   pinMode(PIN_DOT,   INPUT_PULLUP);
   pinMode(PIN_DASH,  INPUT_PULLUP);
-  pinMode(PIN_ERASE, INPUT_PULLUP);
-  pinMode(PIN_SEND,  INPUT_PULLUP);
+  pinMode(pinErase, INPUT_PULLUP);
+  pinMode(pinSend,  INPUT_PULLUP);
 
   /* --- RGB LED pins --- */
   pinMode(PIN_LED_R, OUTPUT);
@@ -425,14 +425,14 @@ void loop() {
   }
 
   /* ERASE button → red flash */
-  if (debounceButton(PIN_ERASE, btnErase)) {
+  if (debounceButton(pinErase, btnErase)) {
     Serial.println(F("[BTN] ERASE pressed"));
     eraseCurrentInput();
     flashRGB(true, false, false); // Red
   }
 
   /* SEND button → blue flash */
-  if (debounceButton(PIN_SEND, btnSend)) {
+  if (debounceButton(pinSend, btnSend)) {
     Serial.println(F("[BTN] SEND pressed"));
     /* Finalise any in-progress pattern first */
     if (morseLen > 0) {
@@ -448,7 +448,7 @@ void loop() {
 
   /* ── Character auto-finalisation timeout ────────────────── */
   if (morseLen > 0 && lastInputTime > 0 &&
-      (millis() - lastInputTime) >= CHAR_TIMEOUT_MS) {
+      (millis() - lastInputTime) >= charTimeoutMs) {
     finalizeCharacter();
   }
 
@@ -459,22 +459,22 @@ void loop() {
   }
 
   /* ── LCD line-2 scrolling for words longer than 14 chars ── */
-  if (wordLen > LCD_COLS && (millis() - lastScrollTime) >= LCD_SCROLL_MS) {
+  if (wordLen > lcdCols && (millis() - lastScrollTime) >= lcdScrollMs) {
     lastScrollTime = millis();
     scrollOffset++;
-    if (scrollOffset > wordLen - LCD_COLS) {
-      /* scrollOffset == wordLen - LCD_COLS is the last valid full-screen position;
+    if (scrollOffset > wordLen - lcdCols) {
+      /* scrollOffset == wordLen - lcdCols is the last valid full-screen position;
          reset only when we have gone past it so that position is actually displayed. */
       scrollOffset = 0;  // Wrap
     }
     /* Rewrite only line 2 to avoid full clear flicker */
     lcd.setCursor(0, 1);
-    int end = scrollOffset + LCD_COLS;
+    int end = scrollOffset + lcdCols;
     if (end > wordLen) end = wordLen;
     for (int i = scrollOffset; i < end; i++) {
       lcd.print(wordBuffer[i]);
     }
-    for (int i = end - scrollOffset; i < LCD_COLS; i++) {
+    for (int i = end - scrollOffset; i < lcdCols; i++) {
       lcd.print(' ');
     }
   }
@@ -495,8 +495,8 @@ bool debounceButton(int pin, ButtonState &btn) {
     btn.lastRaw = raw;
   }
 
-  /* Only act after the signal has been stable for DEBOUNCE_MS */
-  if ((millis() - btn.lastEdgeTime) >= DEBOUNCE_MS) {
+  /* Only act after the signal has been stable for debounceMs */
+  if ((millis() - btn.lastEdgeTime) >= debounceMs) {
     if (raw == LOW && !btn.pressed) {
       /* Button is newly pressed */
       btn.pressed = true;
@@ -650,12 +650,12 @@ void updateLCD() {
   /* ── Line 1: morse pattern or status ── */
   lcd.setCursor(0, 0);
   if (morseLen > 0) {
-    int printLen = (morseLen < LCD_COLS) ? morseLen : LCD_COLS;
+    int printLen = (morseLen < lcdCols) ? morseLen : lcdCols;
     for (int i = 0; i < printLen; i++) {
       lcd.print(morsePattern[i]);
     }
     /* Pad to full width */
-    for (int i = printLen; i < LCD_COLS; i++) {
+    for (int i = printLen; i < lcdCols; i++) {
       lcd.print(' ');
     }
   } else {
@@ -670,19 +670,19 @@ void updateLCD() {
   /* ── Line 2: word buffer ── */
   lcd.setCursor(0, 1);
   if (wordLen == 0) {
-    for (int i = 0; i < LCD_COLS; i++) lcd.print(' ');
-  } else if (wordLen <= LCD_COLS) {
+    for (int i = 0; i < lcdCols; i++) lcd.print(' ');
+  } else if (wordLen <= lcdCols) {
     lcd.print(wordBuffer);
-    for (int i = wordLen; i < LCD_COLS; i++) lcd.print(' ');
+    for (int i = wordLen; i < lcdCols; i++) lcd.print(' ');
     scrollOffset = 0;
   } else {
     /* Show from current scrollOffset – the loop() refreshes this */
-    int end = scrollOffset + LCD_COLS;
+    int end = scrollOffset + lcdCols;
     if (end > wordLen) end = wordLen;
     for (int i = scrollOffset; i < end; i++) {
       lcd.print(wordBuffer[i]);
     }
-    for (int i = end - scrollOffset; i < LCD_COLS; i++) {
+    for (int i = end - scrollOffset; i < lcdCols; i++) {
       lcd.print(' ');
     }
   }
@@ -691,7 +691,7 @@ void updateLCD() {
 // ============================================================
 // HELPER: flashRGB
 //
-// Lights the RGB LED in the requested colour for LED_FLASH_MS.
+// Lights the RGB LED in the requested colour for ledFlashMs.
 // The LED is turned off non-blocking in the main loop.
 //   r, g, b : true = channel on, false = channel off
 // ============================================================
@@ -704,7 +704,7 @@ void flashRGB(bool r, bool g, bool b) {
   digitalWrite(PIN_LED_R, r ? HIGH : LOW);
   digitalWrite(PIN_LED_G, g ? HIGH : LOW);
   digitalWrite(PIN_LED_B, b ? HIGH : LOW);
-  ledOffTime = millis() + LED_FLASH_MS;
+  ledOffTime = millis() + ledFlashMs;
 }
 
 // ============================================================
@@ -731,9 +731,9 @@ void sendViaBLE(const char *word) {
   lcd.print(F("SENDING...    "));
   lcd.setCursor(0, 1);
   /* Show up to 14 characters of the word */
-  int displayLen = (len < LCD_COLS) ? len : LCD_COLS;
+  int displayLen = (len < lcdCols) ? len : lcdCols;
   for (int i = 0; i < displayLen; i++) lcd.print(word[i]);
-  for (int i = displayLen; i < LCD_COLS; i++) lcd.print(' ');
+  for (int i = displayLen; i < lcdCols; i++) lcd.print(' ');
 
   statusChar.writeValue((uint8_t *)"SENDING", 7);
 
@@ -753,7 +753,7 @@ void sendViaBLE(const char *word) {
   lcd.print(F("SENT          "));
   lcd.setCursor(0, 1);
   for (int i = 0; i < displayLen; i++) lcd.print(word[i]);
-  for (int i = displayLen; i < LCD_COLS; i++) lcd.print(' ');
+  for (int i = displayLen; i < lcdCols; i++) lcd.print(' ');
 
   Serial.println(F("[SEND] Transmission complete"));
 
