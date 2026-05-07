@@ -7,8 +7,8 @@
  *   Pin 3 - DAH paddle  (TRRS Ring1 → D3, TRRS Sleeve → GND) — press always = DASH
  *   Pin 4 - ERASE button      (connect between pin and GND, uses INPUT_PULLUP)
  *   Pin 5 - SEND button       (connect between pin and GND, uses INPUT_PULLUP)
- *   Pin 6 - GREEN LED     (with 220 ohm resistor to GND) - flashes for dot
- *   Pin 7 - RED LED       (with 220 ohm resistor to GND) - flashes for dash
+ *   Pin 6 - GREEN LED     (with 220 ohm resistor to GND) - flashes for DIT/dot input
+ *   Pin 7 - RED LED       (with 220 ohm resistor to GND) - flashes for DAH/dash input
  *   Pin 8 - YELLOW LED    (with 220 ohm resistor to GND) - flashes for SEND and ERASE
  *   Pin 9 - PIEZO BUZZER  (signal pin to D9, other pin to GND) - beeps for dot/dash
  *   Standard HD44780 LCD 14x2 (parallel 4-bit mode, no I2C backpack needed)
