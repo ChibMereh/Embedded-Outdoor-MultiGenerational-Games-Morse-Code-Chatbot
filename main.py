@@ -11,23 +11,19 @@ from config import (    # import all settings from config.py
     ENABLE_DISPLAY,          # whether to print status messages to the terminal
     ENABLE_LOGGING,          # whether to write log messages to a file
     LOG_FILE,                # the name of the log file
-    INPUT_METHOD,            # which input mode to use: "GPIO", "SERIAL", or "BLUETOOTH"
     ANTHROPIC_API_KEY,       # the Anthropic API key (can also be set as an environment variable)
     ANTHROPIC_MODEL,         # which Claude model to use
     ANTHROPIC_MAX_TOKENS,    # maximum number of tokens in the AI's reply
     ANTHROPIC_TEMPERATURE,   # how creative the AI's reply is (0.0 = predictable, 1.0 = creative)
-    ENABLE_BT_RESPONSE,      # whether to send the AI reply back to the Arduino
-    BT_RESPONSE_ENCODING,    # how to encode the reply: "TEXT" or "MORSE"
+    ENABLE_BLE_RESPONSE,     # whether to send the AI reply back to the Arduino
     AUTO_RESPONSE,           # whether to automatically send the AI reply after each message
-    USE_BLE,                 # True = use BLE (Arduino Nano 33 BLE), False = classic Bluetooth serial
     BLE_DEVICE_NAME,         # the Bluetooth name the Arduino advertises (e.g. "MorseEncoder")
     BLE_SCAN_TIMEOUT,        # how many seconds to scan for the Arduino before giving up
     MESSAGE_TIMEOUT_S,       # seconds of silence before treating accumulated words as a full message
     SCENARIO_PROMPT,         # the system prompt that gives the AI its personality / game role
 )
-from morse_decoder import MorseDecoder          # class that converts dots/dashes to letters and words
-from input_handler import MorseInputProcessor, create_input_handler, BluetoothInputHandler  # input classes
 from word_validator import WordValidator        # class that checks whether a decoded word is in the dictionary
+from ble_handler import BLECentralHandler       # BLE central input/output handler
 
 # Configure logging – only set up file+console logging if ENABLE_LOGGING is True
 if ENABLE_LOGGING:
@@ -64,84 +60,14 @@ class MorseCodeChatbot:
     """Main application class for the Morse code decoder chatbot"""
     
     def __init__(self):
-        self.decoder = MorseDecoder()           # creates the Morse decoder (converts dots/dashes → letters)
-        self.processor = MorseInputProcessor()  # creates the GPIO signal processor (measures pulse lengths)
         self.validator = WordValidator()        # creates the dictionary validator (checks if words are real)
         self.input_handler = None               # will hold the active input handler once setup_input() runs
-        self.last_character_time = None         # timestamp of the last dot or dash (used by GPIO mode)
         self.last_word_time = None              # timestamp of the last completed word
         self.decoded_words = []                 # accumulates words until the full message is sent to Claude
         self._timeout_thread = None             # background thread that fires on_message_end after silence
         self._timeout_lock = threading.Lock()   # protects decoded_words and last_word_time from race conditions
         
         logger.info("Morse Code Chatbot initialized")  # log that setup is complete
-    
-    # ── Signal handlers (classic Bluetooth / GPIO / Serial modes) ─────────
-
-    def on_signal_detected(self, signal_type, duration):
-        """Handle detected morse signals"""
-        current_time = time.time()                      # record when this signal arrived
-        
-        if signal_type == "DOT":
-            self.decoder.add_signal("DOT")              # tell the decoder a dot was received
-            if ENABLE_DISPLAY:
-                print(".", end="", flush=True)          # print a dot on the console (no newline)
-            self.last_character_time = current_time     # remember when this dot arrived
-        
-        elif signal_type == "DASH":
-            self.decoder.add_signal("DASH")             # tell the decoder a dash was received
-            if ENABLE_DISPLAY:
-                print("-", end="", flush=True)          # print a dash on the console (no newline)
-            self.last_character_time = current_time     # remember when this dash arrived
-        
-        elif signal_type == "CHARACTER_GAP":
-            self.on_character_gap()                     # a pause between letters – decode the current pattern
-        
-        elif signal_type == "WORD_GAP":
-            self.on_word_gap()                          # a longer pause – end the current word
-        
-        elif signal_type == "MESSAGE_END":
-            self.on_message_end()                       # a newline arrived – send the full message to Claude
-    
-    def on_character_gap(self):
-        """Handle gap between characters"""
-        character = self.decoder.decode_character()     # look up the current dot/dash pattern in the Morse table
-        
-        if character:                                   # if the pattern matched a valid letter
-            self.decoder.add_character_to_word(character)          # append the letter to the word being built
-            if ENABLE_DISPLAY:
-                print(f" [{character}] ", end="", flush=True)      # show the decoded letter on the console
-            logger.info(f"Character decoded: {character}")         # log the decoded letter
-    
-    def on_word_gap(self):
-        """Handle gap between words"""
-        # First, decode any pending character (the last letter before the word gap)
-        character = self.decoder.decode_character()     # decode whatever dots/dashes are still buffered
-        if character:                                   # if there was a pending letter
-            self.decoder.add_character_to_word(character)          # add it to the word
-            if ENABLE_DISPLAY:
-                print(f" [{character}] ", end="", flush=True)      # show it on the console
-        
-        # Then complete the word and validate it
-        word = self.decoder.complete_word()             # finalise the word (returns it and clears the buffer)
-        
-        if word:                                        # if the word is not empty
-            is_valid = self.validator.validate_word(word)           # check whether the word is in the dictionary
-            status = "✓ VALID" if is_valid else "✗ INVALID"        # friendly status string for display
-            
-            if ENABLE_DISPLAY:
-                print(f"\n>>> WORD: {word} {status}\n", flush=True)  # print the word and its validity
-            
-            logger.info(f"Word decoded: {word} - {status}")        # log the word and status
-            
-            if not is_valid:                            # if the word was not recognised
-                suggestions = self.validator.get_suggestions(word)  # find similar words in the dictionary
-                if suggestions:
-                    logger.info(f"Did you mean: {', '.join(suggestions)}")   # log the suggestions
-                    if ENABLE_DISPLAY:
-                        print(f"Did you mean: {', '.join(suggestions)}\n")  # show suggestions on console
-            
-            self.decoded_words.append(word)             # add the word to the message being accumulated
     
     # ── BLE word handler ─────────────────────────────────────────────────
 
@@ -284,67 +210,35 @@ class MorseCodeChatbot:
         """
         Send the AI response back to the Arduino.
 
-        In BLE mode the text is written directly to responseChar so the Arduino
-        can display it on its LCD.  In classic Bluetooth mode the existing
-        serial path is used (optionally Morse-encoded).
+        The text is written to responseChar so the Arduino can display it
+        on its LCD.
 
         Args:
             response_text (str): Plain text AI response to send.
         """
-        if not ENABLE_BT_RESPONSE:
+        if not ENABLE_BLE_RESPONSE:
             return                              # response delivery is disabled – do nothing
 
-        if USE_BLE:
-            if hasattr(self.input_handler, "send_response"):    # check the BLE handler has a send method
-                if ENABLE_DISPLAY:
-                    preview = response_text[:80]                # take the first 80 characters for the preview
-                    print(f"Sending BLE response: {preview}"
-                          f"{'...' if len(response_text) > 80 else ''}\n")  # show preview on console
-                self.input_handler.send_response(response_text) # write the text to the Arduino's responseChar
-            else:
-                logger.warning("BLE handler has no send_response(); response not sent")  # log the issue
-        else:
-            # Legacy classic Bluetooth serial path
-            if not isinstance(self.input_handler, BluetoothInputHandler):   # must be a Bluetooth handler
-                logger.warning("Input handler is not Bluetooth; cannot send response")
-                return
-            
-            if BT_RESPONSE_ENCODING.upper() == "MORSE":
-                encoded = self.decoder.text_to_morse(response_text)  # convert the reply to Morse dots/dashes
-            else:
-                encoded = response_text             # send as plain text
-            
+        if hasattr(self.input_handler, "send_response"):    # check the BLE handler has a send method
             if ENABLE_DISPLAY:
-                print(f"Sending response via Bluetooth ({BT_RESPONSE_ENCODING}): "
-                      f"{encoded[:80]}{'...' if len(encoded) > 80 else ''}\n")  # show preview on console
-            
-            self.input_handler.send(encoded)        # transmit the encoded reply over the Bluetooth serial link
+                preview = response_text[:80]                # take the first 80 characters for the preview
+                print(f"Sending BLE response: {preview}"
+                      f"{'...' if len(response_text) > 80 else ''}\n")  # show preview on console
+            self.input_handler.send_response(response_text) # write the text to the Arduino's responseChar
+        else:
+            logger.warning("BLE handler has no send_response(); response not sent")  # log the issue
     
     # ── Setup & run ──────────────────────────────────────────────────────
 
     def setup_input(self):
-        """Setup input handler based on configuration"""
-        if USE_BLE:
-            from ble_handler import BLECentralHandler               # import the BLE handler class
+        """Setup BLE input handler."""
+        try:
             self.input_handler = BLECentralHandler(
                 device_name=BLE_DEVICE_NAME,                        # the name the Arduino is advertising
                 scan_timeout=BLE_SCAN_TIMEOUT,                      # how long to scan before giving up
                 word_callback=self.on_ble_word_received,            # called each time a word arrives over BLE
             )
-            logger.info("BLE central input handler created")        # log that setup is done
-            return
-
-        try:
-            self.input_handler = create_input_handler(INPUT_METHOD)  # create GPIO, Serial, or Bluetooth handler
-            
-            if INPUT_METHOD.upper() == "GPIO":
-                self.input_handler.register_callback(self.processor.process_signal)  # GPIO → signal processor
-                self.processor.register_callback(self.on_signal_detected)            # signal processor → chatbot
-            else:
-                # BLUETOOTH and SERIAL handlers emit signal events directly
-                self.input_handler.register_callback(self.on_signal_detected)  # handler → chatbot directly
-            
-            logger.info(f"Input handler ({INPUT_METHOD}) setup complete")  # log success
+            logger.info("BLE central input handler created")        # log success
         except Exception as e:
             logger.error(f"Failed to setup input handler: {e}")    # log the error
             raise                                                   # re-raise so the caller can handle it
@@ -357,17 +251,12 @@ class MorseCodeChatbot:
             if ENABLE_DISPLAY:
                 print("=" * 60)         # print a top separator
                 print("Morse Code Decoder - Chatbot")   # print the application title
-                mode = "BLE" if USE_BLE else INPUT_METHOD          # choose display label for input mode
-                print(f"Input method: {mode}")
+                print("Input method: BLE")
                 print(f"Claude: {'enabled' if anthropic_client else 'disabled (no API key)'}")
-                print(f"Bluetooth response: {'enabled' if ENABLE_BT_RESPONSE else 'disabled'}")
-                if USE_BLE:
-                    print(f"Scenario: {SCENARIO_PROMPT[:60]}…")    # show the first 60 chars of the scenario
+                print(f"Bluetooth response: {'enabled' if ENABLE_BLE_RESPONSE else 'disabled'}")
+                print(f"Scenario: {SCENARIO_PROMPT[:60]}…")    # show the first 60 chars of the scenario
                 print("=" * 60)
-                if USE_BLE:
-                    print(f"Scanning for '{BLE_DEVICE_NAME}'…")    # remind the user what we are looking for
-                else:
-                    print("Waiting for morse code input from Arduino…")
+                print(f"Scanning for '{BLE_DEVICE_NAME}'…")    # remind the user what we are looking for
                 print("(Use Ctrl+C to exit)")
                 print("=" * 60)
             

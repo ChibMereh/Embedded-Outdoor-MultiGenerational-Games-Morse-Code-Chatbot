@@ -236,6 +236,6 @@ async def main():
 asyncio.run(main())
 ```
 
-For full integration with the existing chatbot, update `config.py` to set  
-`INPUT_METHOD = "BLUETOOTH"` and point `BLUETOOTH_PORT` to the BLE serial  
-interface or adapt `input_handler.py` to use `bleak`.
+For full integration with the existing chatbot, keep `BLE_DEVICE_NAME`
+in `config.py` aligned with `BLE.setLocalName()` in the sketch so the
+Raspberry Pi can discover and connect to the Arduino peripheral.

@@ -1,11 +1,7 @@
 """
 Configuration settings for Morse code decoder
-Arduino Nano Bluetooth communication with Anthropic Claude integration
+Arduino Nano BLE communication with Anthropic Claude integration
 """
-
-# GPIO Configuration
-GPIO_PIN = 17       # BCM pin number on the Raspberry Pi where the Morse button is wired
-GPIO_MODE = "BCM"   # use BCM (Broadcom) pin numbering rather than physical board pin numbers
 
 # Timing Configuration (in milliseconds)
 DOT_DURATION = 100   # a button press shorter than this is a dot (100 ms)
@@ -13,20 +9,9 @@ DASH_DURATION = 300  # a button press longer than DOT_DURATION but shorter than 
 CHARACTER_GAP = 300  # a silence of this length separates two letters within a word
 WORD_GAP = 700       # a silence of this length separates two words in the message
 
-# Input Configuration
-INPUT_METHOD = "BLUETOOTH"  # which input source to use: "GPIO" (Raspberry Pi pin), "SERIAL" (USB), or "BLUETOOTH"
-SERIAL_PORT = "/dev/ttyUSB0"    # serial device file for a USB-connected Arduino
-SERIAL_BAUDRATE = 9600          # communication speed for the serial connection (bits per second)
-
-# Arduino Nano Bluetooth Configuration (HC-05/HC-06 module)
-BLUETOOTH_PORT = "/dev/rfcomm0"     # serial device file for the classic Bluetooth connection
-BLUETOOTH_BAUDRATE = 9600           # communication speed for the Bluetooth serial link
-
 # ── BLE Configuration (Arduino Nano 33 BLE) ─────────────────────────────────
-# Set USE_BLE = True to use the bleak-based BLE central instead of the legacy
-# classic Bluetooth serial handler.  This is required for the Arduino Nano 33
-# BLE which uses BLE GATT rather than a classic RFCOMM serial link.
-USE_BLE = True      # True = connect via BLE GATT (Arduino Nano 33 BLE); False = classic Bluetooth serial
+# The project runs BLE-only using a bleak-based BLE central because Nano 33 BLE
+# uses BLE GATT characteristics instead of a classic Bluetooth serial link.
 
 # Advertised name of the Arduino peripheral (must match BLE.setLocalName() in
 # the Arduino sketch).
@@ -52,7 +37,7 @@ MIN_WORD_LENGTH = 2     # words shorter than this many letters are rejected as i
 MAX_WORD_LENGTH = 20    # words longer than this many letters are rejected as invalid
 
 # Anthropic Claude Configuration
-ANTHROPIC_API_KEY = "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"     # paste your Anthropic API key here, or leave blank and set the ANTHROPIC_API_KEY environment variable
+ANTHROPIC_API_KEY = ""     # paste your Anthropic API key here, or leave blank and set the ANTHROPIC_API_KEY environment variable
 ANTHROPIC_MODEL = "claude-3-5-haiku-latest"   # Claude model to use
 ANTHROPIC_MAX_TOKENS = 240                     # maximum length of the AI's reply in tokens
 ANTHROPIC_TEMPERATURE = 0.7                    # how creative the AI reply is: 0.0 = very predictable, 1.0 = very random
@@ -69,7 +54,6 @@ SCENARIO_PROMPT = (
     "as they will be displayed on a small LCD screen attached to an Arduino."  # explain why brevity matters
 )
 
-# Bluetooth Response Configuration
-ENABLE_BT_RESPONSE = True           # True = send the AI reply back to the Arduino after each message
-BT_RESPONSE_ENCODING = "TEXT"       # how to encode the reply: "TEXT" sends plain text; "MORSE" sends dots and dashes
+# BLE Response Configuration
+ENABLE_BLE_RESPONSE = True          # True = send the AI reply back to the Arduino after each message
 AUTO_RESPONSE = True                # True = automatically send to Claude as soon as a full message is received
