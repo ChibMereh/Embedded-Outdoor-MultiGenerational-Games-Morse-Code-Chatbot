@@ -1,6 +1,6 @@
 """
 Configuration settings for Morse code decoder
-Arduino Nano Bluetooth communication with OpenAI integration
+Arduino Nano Bluetooth communication with Anthropic Claude integration
 """
 
 # GPIO Configuration
@@ -39,7 +39,7 @@ BLE_SCAN_TIMEOUT = 30.0     # seconds to wait while scanning before reporting th
 # as a complete message and sending them to the AI.  The user can also
 # trigger a send immediately by pressing the SEND button on the Arduino, which
 # transmits a special "SEND" sentinel word.
-MESSAGE_TIMEOUT_S = 8.0     # seconds of silence after the last word before the message is sent to OpenAI
+MESSAGE_TIMEOUT_S = 8.0     # seconds of silence after the last word before the message is sent to Claude
 
 # Output Configuration
 ENABLE_LOGGING = True           # True = write log messages to LOG_FILE (and console); False = no logging
@@ -51,14 +51,14 @@ DICTIONARY_FILE = "english_words.txt"  # path to the text file containing one va
 MIN_WORD_LENGTH = 2     # words shorter than this many letters are rejected as invalid
 MAX_WORD_LENGTH = 20    # words longer than this many letters are rejected as invalid
 
-# OpenAI Configuration
-OPENAI_API_KEY = ""     # paste your OpenAI API key here, or leave blank and set the OPENAI_API_KEY environment variable
-OPENAI_MODEL = "gpt-3.5-turbo"      # the OpenAI chat model to use (gpt-3.5-turbo is fast and affordable)
-OPENAI_MAX_TOKENS = 240             # maximum length of the AI's reply in tokens (longer replies while still LCD-scrollable)
-OPENAI_TEMPERATURE = 0.7            # how creative the AI reply is: 0.0 = very predictable, 1.0 = very random
+# Anthropic Claude Configuration
+ANTHROPIC_API_KEY = ""     # paste your Anthropic API key here, or leave blank and set the ANTHROPIC_API_KEY environment variable
+ANTHROPIC_MODEL = "claude-3-5-haiku-latest"   # Claude model to use
+ANTHROPIC_MAX_TOKENS = 240                     # maximum length of the AI's reply in tokens
+ANTHROPIC_TEMPERATURE = 0.7                    # how creative the AI reply is: 0.0 = very predictable, 1.0 = very random
 
 # ── Scenario Prompt ──────────────────────────────────────────────────────────
-# This is the OpenAI system message.  Change it to set the game scenario.
+# This is the Claude system message.  Change it to set the game scenario.
 # Examples:
 #   "You are an SOS rescue coordinator receiving distress calls via Morse code."
 #   "You are a pirate guarding treasure. Answer riddles in 1-2 sentences."
@@ -72,4 +72,4 @@ SCENARIO_PROMPT = (
 # Bluetooth Response Configuration
 ENABLE_BT_RESPONSE = True           # True = send the AI reply back to the Arduino after each message
 BT_RESPONSE_ENCODING = "TEXT"       # how to encode the reply: "TEXT" sends plain text; "MORSE" sends dots and dashes
-AUTO_RESPONSE = True                # True = automatically send to OpenAI as soon as a full message is received
+AUTO_RESPONSE = True                # True = automatically send to Claude as soon as a full message is received
