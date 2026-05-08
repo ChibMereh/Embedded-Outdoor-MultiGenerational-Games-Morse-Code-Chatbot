@@ -42,8 +42,8 @@
  *   4. Press ERASE to clear everything and start again
  *      - YELLOW LED flashes to confirm
  *   5. When the AI sends a reply, it plays first as Morse on the buzzer only
- *      (high tone = dot, low tone = dash). Press SEND (with no word queued)
- *      to reveal the text on the LCD if needed.
+ *      (high tone = dot, low tone = dash), then automatically shows the text
+ *      on the LCD top row.
  *
  * BLE (Bluetooth) service ID: 12345678-1234-5678-1234-56789abcdef0
  *   Channel def1 - current Morse pattern  (readable/notifiable)
@@ -643,11 +643,11 @@ void loop() {
     aiResponseLen   = len;                                         // Save the length
     aiScrollOffset  = 0;                                           // Start scrolling from the beginning
     lastAiScrollTime = millis();                                   // Reset the scroll timer
-    showingAiResponse = false;                                     // Keep text hidden until user requests reveal
-    aiResponsePendingReveal = true;                                // Mark hidden reply waiting to be revealed
+    showingAiResponse = true;                                      // Show text automatically after Morse playback
+    aiResponsePendingReveal = false;                               // No manual reveal required
     Serial.print(F("AI response received: ")); Serial.println(aiResponse);  // Print to Serial Monitor
     playYellowFeedback();                                          // Play YELLOW feedback to show reply arrived
     playMorse(aiResponse, true);                                   // Play reply as buzzer-only Morse first
-    updateLCD();                                                   // Prompt "SEND=Show AI" until user reveals
+    updateLCD();                                                   // Show the AI text on IN row
   }
 }

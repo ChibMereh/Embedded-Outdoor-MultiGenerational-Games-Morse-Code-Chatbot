@@ -133,8 +133,7 @@ The Raspberry Pi 4 connects to this peripheral as a BLE central using a library 
 5. **Press Send** to transmit the word to the Raspberry Pi via BLE (blue LED flash).  
    Send status appears on the **OUT:** line while receive-side status/replies remain on **IN:**.  
 6. **Press Erase** at any time to clear the current pattern and word buffer (red LED flash).
-7. **When an AI reply arrives**, it is played first as **buzzer-only Morse** (dot = higher tone, dash = lower tone).  
-   The **IN:** line stays hidden so the user can decode first. If needed, press **Send** with an empty word buffer to reveal the AI text on **IN:**.
+7. **When an AI reply arrives**, it is played first as **buzzer-only Morse** (dot = higher tone, dash = lower tone), then the AI text is shown automatically on **IN:**.
 
 ### LCD layout
 - **IN:** line = received AI response and receive-side status prompts  
