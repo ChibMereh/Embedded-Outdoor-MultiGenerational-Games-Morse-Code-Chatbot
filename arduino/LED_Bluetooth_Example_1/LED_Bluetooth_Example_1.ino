@@ -83,9 +83,10 @@ const unsigned long charTimeoutMs = 800;  // Wait 800ms of silence before decodi
 const unsigned long ledFlashMs    = 200;  // LED stays on for 200ms when it flashes
 const unsigned long lcdScrollMs   = 400;  // How often the LCD scrolls long text (every 400ms)
 // Dot/dash are selected by dedicated paddles (D2=DIT, D3=DAH); hold-time debug logging was removed.
-const unsigned int  dotToneHz      = 1200; // Dot beep pitch
-const unsigned int  dashToneHz     = 700;  // Dash beep pitch (different so it is distinguishable)
-const unsigned int  letterToneHz   = 950;  // Decoded-letter pitch (different from dot and dash)
+const unsigned int  morseBeepHz    = 700;  // Unified pitch for dot/dash input feedback – same tone, different durations (like real Morse)
+const unsigned int  dotToneHz      = 1200; // Higher pitch used only during AI-response playback (dot)
+const unsigned int  dashToneHz     = 700;  // Lower pitch used only during AI-response playback (dash)
+const unsigned int  letterToneHz   = 950;  // Decoded-letter pitch (distinct from input feedback)
 const unsigned long dotMinMs       = 90;   // Fastest dot duration when pot is at minimum
 const unsigned long dotMaxMs       = 260;  // Slowest dot duration when pot is at maximum
 
@@ -227,24 +228,24 @@ bool pressed(int pin, bool &lastRaw, unsigned long &edgeTime, bool &held) {
   return false;                             // No new press detected
 }
 
-// Play dot feedback: green LED + higher-pitch buzzer tone for the given duration.
+// Play dot feedback: green LED + short beep (same pitch as dash, shorter duration = real Morse feel).
 // NOTE: Uses delay(), so this is blocking while active.
 void signalDot(unsigned long durationMs) {
-  digitalWrite(pinLedGreen, HIGH);   // Turn green LED on
-  tone(pinBuzzer, dotToneHz);       // Start higher-pitch dot tone
-  delay(durationMs);                   // Hold for requested duration
+  digitalWrite(pinLedGreen, HIGH);    // Turn green LED on
+  tone(pinBuzzer, morseBeepHz);       // Short beep – same pitch as dash, duration makes it a dot
+  delay(durationMs);                  // Hold for requested duration
   noTone(pinBuzzer);                  // Stop buzzer
-  digitalWrite(pinLedGreen, LOW);    // Turn green LED off
+  digitalWrite(pinLedGreen, LOW);     // Turn green LED off
 }
 
-// Play dash feedback: red LED + lower-pitch buzzer tone for the given duration.
+// Play dash feedback: red LED + long beep (same pitch as dot, 3× longer duration = real Morse feel).
 // NOTE: Uses delay(), so this is blocking while active.
 void signalDash(unsigned long durationMs) {
-  digitalWrite(pinLedRed, HIGH);     // Turn red LED on
-  tone(pinBuzzer, dashToneHz);      // Start lower-pitch dash tone
-  delay(durationMs);                   // Hold for requested duration
+  digitalWrite(pinLedRed, HIGH);      // Turn red LED on
+  tone(pinBuzzer, morseBeepHz);       // Long beep – same pitch as dot, duration makes it a dash
+  delay(durationMs);                  // Hold for requested duration
   noTone(pinBuzzer);                  // Stop buzzer
-  digitalWrite(pinLedRed, LOW);      // Turn red LED off
+  digitalWrite(pinLedRed, LOW);       // Turn red LED off
 }
 
 // Play dot tone only (no LED), used for AI-response decode-first playback mode
