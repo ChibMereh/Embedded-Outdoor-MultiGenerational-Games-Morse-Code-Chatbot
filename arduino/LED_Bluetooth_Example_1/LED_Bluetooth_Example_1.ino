@@ -461,6 +461,7 @@ void setup() {
   pinMode(pinKeyerDah, INPUT_PULLUP);  // DAH (dash) paddle input pin
   pinMode(pinErase,     INPUT_PULLUP);  // ERASE button pin
   pinMode(pinSend,      INPUT_PULLUP);  // SEND button pin
+  pinMode(pinSpeedPot,  INPUT_PULLDOWN); // Keep A6 stable when no speed pot is connected
 
   // Set the LED pins as outputs so we can turn them on and off
   pinMode(pinLedGreen,  OUTPUT);   // Green LED pin

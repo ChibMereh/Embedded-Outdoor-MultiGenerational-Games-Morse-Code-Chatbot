@@ -61,6 +61,7 @@ Wire the buzzer signal leg to **D9** and the other leg to **GND**.
 | A6  | Potentiometer wiper input (adjusts dot speed; dash is 3× dot) |
 
 Connect one potentiometer outer pin to **3.3V**, the other outer pin to **GND**, and the wiper to **A6**.
+If no potentiometer is connected, the sketch uses an internal pulldown on A6 and defaults to the fastest dot setting.
 
 ### LCD (HD44780 — parallel 4-bit mode, no I2C backpack)
 
