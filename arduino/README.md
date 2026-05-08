@@ -50,9 +50,17 @@ Typical wiring: each channel → 220 Ω resistor → LED anode; LED cathode → 
 
 | Pin | Function |
 |-----|----------|
-| D9  | Piezo buzzer output (dot = higher tone, dash = lower tone) |
+| D9  | Piezo buzzer output (dot = higher tone, dash = lower tone, decoded-letter = distinct mid tone on yellow LED) |
 
 Wire the buzzer signal leg to **D9** and the other leg to **GND**.
+
+### Optional speed potentiometer (Morse timing)
+
+| Pin | Function |
+|-----|----------|
+| A6  | Potentiometer wiper input (adjusts dot speed; dash is 3× dot) |
+
+Connect one potentiometer outer pin to **3.3V**, the other outer pin to **GND**, and the wiper to **A6**.
 
 ### LCD (HD44780 — parallel 4-bit mode, no I2C backpack)
 
@@ -113,27 +121,28 @@ The Raspberry Pi 4 connects to this peripheral as a BLE central using a library 
 
 1. **Power on** the Arduino — the LCD shows "Ready BLE OK" and the green LED flashes.  
 2. **Enter a character** using the iambic paddle:  
-   - Press **DIT paddle** (Tip → D2) = dot (`.`) — green LED flashes + higher buzzer tone  
-   - Press **DAH paddle** (Ring1 → D3) = dash (`-`) — red LED flashes + lower buzzer tone  
-   The current outgoing pattern is shown on the **bottom LCD line** in real time.  
+   - Press **DIT paddle** (Tip → D2) = dot (`.`) — green LED + higher buzzer tone (duration follows speed pot)  
+   - Press **DAH paddle** (Ring1 → D3) = dash (`-`) — red LED + lower buzzer tone (3× dot duration)  
+   The current outgoing pattern is shown on the **OUT:** line in real time.  
 3. **After 800 ms of inactivity** the pattern is automatically decoded:  
-   - Recognised character → appended to the **bottom LCD line** (green LED flash).  
-   - Unknown pattern → `? Unknown` on the **bottom LCD line** (red LED + lower buzzer tone).  
+   - Recognised character → appended to the **OUT:** line with a **distinct decoded-letter feedback** (yellow LED + different tone).  
+   - Unknown pattern → `? Unknown` on the **OUT:** line (red LED + lower buzzer tone).  
 4. **Repeat** steps 2–3 to build up a complete word.  
-   Words longer than 14 characters scroll automatically on the bottom line.  
+   Words longer than 14 characters scroll automatically on the **OUT:** line.  
 5. **Press Send** to transmit the word to the Raspberry Pi via BLE (blue LED flash).  
-   The send status appears on the **bottom line** while the **top line** remains reserved for receive-side status/replies.  
+   Send status appears on the **OUT:** line while receive-side status/replies remain on **IN:**.  
 6. **Press Erase** at any time to clear the current pattern and word buffer (red LED flash).
 7. **When an AI reply arrives**, it is played first as **buzzer-only Morse** (dot = higher tone, dash = lower tone).  
-   The **top line** stays hidden so the user can decode first. If needed, press **Send** with an empty word buffer to reveal the AI text on the **top line**.
+   The **IN:** line stays hidden so the user can decode first. If needed, press **Send** with an empty word buffer to reveal the AI text on **IN:**.
 
 ### LCD layout
-- **Top line** = received AI response and receive-side status prompts  
-- **Bottom line** = Arduino input, outgoing Morse pattern, and the word being sent
+- **IN:** line = received AI response and receive-side status prompts  
+- **OUT:** line = Arduino input, outgoing Morse pattern, and the word being sent  
+- The LCD no longer shows "searching for device"; when not connected the **IN:** content stays blank.
 
 ### Word spacing
 Pressing Send after each word is the primary way to delimit words.  
-Alternatively, entering the Morse sequence for `'/'` (dash · dot · dot · dash · dot = `"-..-."`) inserts a `/` character into the word buffer, which the Raspberry Pi side interprets as a word separator.
+Alternatively, entering the Morse sequence for `'/'` (dash · dot · dot · dash · dot = `"-..-."`) inserts an actual **space** in the outgoing text.
 
 ---
 
