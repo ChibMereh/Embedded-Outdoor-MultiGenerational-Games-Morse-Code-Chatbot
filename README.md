@@ -14,7 +14,7 @@ small LCD screen.
 │                                 │                          │                    │
 │  Keyer + ERASE/SEND buttons     │  wordChar (Notify) ───► │  ble_handler.py    │
 │  LCD 14×2 displays:             │                          │  morse_decoder.py  │
-│    • top: received AI text      │ ◄─── responseChar (Write)│  OpenAI API        │
+│    • top: received AI text      │ ◄─── responseChar (Write)│  Anthropic Claude  │
 │    • bottom: outgoing input     │                          │  main.py           │
 │    • decode-first reveal flow   │                          └────────────────────┘
 └─────────────────────────────────┘
@@ -29,7 +29,7 @@ small LCD screen.
    notification on `wordChar` (UUID `…def3`).
 4. The Pi accumulates words.  After `MESSAGE_TIMEOUT_S` seconds of silence
    (default 8 s) the accumulated words are assembled into a full message.
-5. The full message is sent to the OpenAI API using the configurable
+5. The full message is sent to the Anthropic Claude API using the configurable
    `SCENARIO_PROMPT` as the system message.
 6. The AI response is written back to the Arduino via `responseChar`
    (UUID `…def5`).
@@ -82,21 +82,21 @@ This installs:
 | Package | Purpose |
 |---------|---------|
 | `bleak>=0.21` | BLE GATT central (replaces classic Bluetooth serial) |
-| `openai>=1.0.0` | OpenAI Python client |
+| `anthropic>=0.40.0` | Anthropic Python client |
 | `pyserial>=3.5` | Kept for legacy GPIO/serial modes |
 
-### 3. Set your OpenAI API key
+### 3. Set your Anthropic API key
 
 Either export it as an environment variable:
 
 ```bash
-export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
 Or set it directly in `config.py`:
 
 ```python
-OPENAI_API_KEY = "sk-..."
+ANTHROPIC_API_KEY = "sk-ant-..."
 ```
 
 ### 4. Customise the scenario prompt
@@ -137,9 +137,9 @@ SCENARIO_PROMPT = (
 | `USE_BLE` | `True` | Use BLE (Nano 33 BLE) vs classic Bluetooth serial |
 | `BLE_DEVICE_NAME` | `"MorseEncoder"` | Must match `BLE.setLocalName()` in the sketch |
 | `BLE_SCAN_TIMEOUT` | `30.0` | Seconds to scan before giving up |
-| `MESSAGE_TIMEOUT_S` | `8.0` | Seconds of silence before message is sent to OpenAI |
-| `OPENAI_MODEL` | `"gpt-3.5-turbo"` | OpenAI model to use |
-| `OPENAI_MAX_TOKENS` | `150` | Keep short so response fits on the LCD |
+| `MESSAGE_TIMEOUT_S` | `8.0` | Seconds of silence before message is sent to Claude |
+| `ANTHROPIC_MODEL` | `"claude-3-5-haiku-latest"` | Claude model to use |
+| `ANTHROPIC_MAX_TOKENS` | `240` | Keep short so response fits on the LCD |
 
 > **LCD character limit:** The LCD is 14 columns wide.  The Arduino scrolls
 > responses that are longer than 14 characters, but try to keep the AI

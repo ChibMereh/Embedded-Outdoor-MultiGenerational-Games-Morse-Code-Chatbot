@@ -1,6 +1,6 @@
 """
 Main application loop for Morse code decoder
-Arduino Nano BLE communication with OpenAI integration
+Arduino Nano BLE communication with Anthropic Claude integration
 """
 
 import os           # provides os.environ for reading environment variables
@@ -12,10 +12,10 @@ from config import (    # import all settings from config.py
     ENABLE_LOGGING,          # whether to write log messages to a file
     LOG_FILE,                # the name of the log file
     INPUT_METHOD,            # which input mode to use: "GPIO", "SERIAL", or "BLUETOOTH"
-    OPENAI_API_KEY,          # the OpenAI API key (can also be set as an environment variable)
-    OPENAI_MODEL,            # which OpenAI model to use (e.g. "gpt-3.5-turbo")
-    OPENAI_MAX_TOKENS,       # maximum number of tokens in the AI's reply
-    OPENAI_TEMPERATURE,      # how creative the AI's reply is (0.0 = predictable, 1.0 = creative)
+    ANTHROPIC_API_KEY,       # the Anthropic API key (can also be set as an environment variable)
+    ANTHROPIC_MODEL,         # which Claude model to use
+    ANTHROPIC_MAX_TOKENS,    # maximum number of tokens in the AI's reply
+    ANTHROPIC_TEMPERATURE,   # how creative the AI's reply is (0.0 = predictable, 1.0 = creative)
     ENABLE_BT_RESPONSE,      # whether to send the AI reply back to the Arduino
     BT_RESPONSE_ENCODING,    # how to encode the reply: "TEXT" or "MORSE"
     AUTO_RESPONSE,           # whether to automatically send the AI reply after each message
@@ -43,18 +43,18 @@ if ENABLE_LOGGING:
 
 logger = logging.getLogger(__name__)    # create a logger named after this module (main)
 
-# OpenAI client setup – try to import and initialise the OpenAI library
+# Anthropic client setup – try to import and initialise the Anthropic library
 try:
-    from openai import OpenAI                                       # import the OpenAI Python client
-    _api_key = OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY", "")  # use key from config, or fall back to environment variable
-    openai_client = OpenAI(api_key=_api_key) if _api_key else None  # create client only if a key is available
-    if openai_client:
-        logger.info("OpenAI client initialized")                    # log success
+    from anthropic import Anthropic                                     # import the Anthropic Python client
+    _api_key = ANTHROPIC_API_KEY or os.environ.get("ANTHROPIC_API_KEY", "")  # use key from config, or fall back to environment variable
+    anthropic_client = Anthropic(api_key=_api_key) if _api_key else None      # create client only if a key is available
+    if anthropic_client:
+        logger.info("Anthropic client initialized")                     # log success
     else:
-        logger.warning("No OpenAI API key configured. AI responses will be disabled.")  # warn that AI is off
+        logger.warning("No Anthropic API key configured. AI responses will be disabled.")  # warn that AI is off
 except ImportError:
-    openai_client = None                        # library not installed, so no AI client
-    logger.warning("openai library not installed. AI responses will be disabled.")  # warn the user
+    anthropic_client = None                        # library not installed, so no AI client
+    logger.warning("anthropic library not installed. AI responses will be disabled.")  # warn the user
 
 # Sentinel word transmitted by the Arduino when the user presses SEND with nothing typed
 _SEND_SENTINEL = "SEND"
@@ -70,7 +70,7 @@ class MorseCodeChatbot:
         self.input_handler = None               # will hold the active input handler once setup_input() runs
         self.last_character_time = None         # timestamp of the last dot or dash (used by GPIO mode)
         self.last_word_time = None              # timestamp of the last completed word
-        self.decoded_words = []                 # accumulates words until the full message is sent to OpenAI
+        self.decoded_words = []                 # accumulates words until the full message is sent to Claude
         self._timeout_thread = None             # background thread that fires on_message_end after silence
         self._timeout_lock = threading.Lock()   # protects decoded_words and last_word_time from race conditions
         
@@ -101,7 +101,7 @@ class MorseCodeChatbot:
             self.on_word_gap()                          # a longer pause – end the current word
         
         elif signal_type == "MESSAGE_END":
-            self.on_message_end()                       # a newline arrived – send the full message to OpenAI
+            self.on_message_end()                       # a newline arrived – send the full message to Claude
     
     def on_character_gap(self):
         """Handle gap between characters"""
@@ -164,7 +164,7 @@ class MorseCodeChatbot:
 
         if word == _SEND_SENTINEL:
             # User pressed SEND with an empty buffer – treat as message end
-            self.on_message_end()       # send whatever words have accumulated so far to OpenAI
+            self.on_message_end()       # send whatever words have accumulated so far to Claude
             return
 
         is_valid = self.validator.validate_word(word)           # check the word against the dictionary
@@ -196,7 +196,7 @@ class MorseCodeChatbot:
             with self._timeout_lock:
                 if generation == self._timeout_generation:  # only fire if we are still the newest timer
                     logger.info("Message timeout – treating accumulated words as full message")
-                    self.on_message_end()           # send the accumulated words to OpenAI
+                    self.on_message_end()           # send the accumulated words to Claude
 
         t = threading.Thread(target=_timer, args=(gen,), daemon=True,
                              name="MsgTimeoutThread")   # create a background daemon thread
@@ -207,7 +207,7 @@ class MorseCodeChatbot:
     def on_message_end(self):
         """
         Handle end of a complete message.
-        Assembles all decoded words into a full message, sends it to OpenAI,
+        Assembles all decoded words into a full message, sends it to Claude,
         and optionally transmits the AI response back via BLE/Bluetooth.
         """
         with self._timeout_lock:                        # acquire lock to safely read/clear decoded_words
@@ -223,16 +223,16 @@ class MorseCodeChatbot:
         
         logger.info(f"Full message received: {full_message}")  # log the full message
         
-        if AUTO_RESPONSE and openai_client:             # if auto-response is on and OpenAI is available
-            ai_response = self.get_openai_response(full_message)    # send the message to OpenAI and get a reply
+        if AUTO_RESPONSE and anthropic_client:          # if auto-response is on and Claude is available
+            ai_response = self.get_claude_response(full_message)    # send the message to Claude and get a reply
             if ai_response:
                 self.send_response(ai_response)         # send the AI reply back to the Arduino
     
-    # ── OpenAI ───────────────────────────────────────────────────────────
+    # ── Anthropic Claude ────────────────────────────────────────────────
 
-    def get_openai_response(self, message):
+    def get_claude_response(self, message):
         """
-        Send a decoded message to OpenAI and return the AI response.
+        Send a decoded message to Claude and return the AI response.
 
         Args:
             message (str): Decoded text message from Arduino.
@@ -240,36 +240,42 @@ class MorseCodeChatbot:
         Returns:
             str: AI response text, or None on error.
         """
-        if not openai_client:
-            logger.warning("OpenAI client not available; skipping AI response")  # warn and bail out
+        if not anthropic_client:
+            logger.warning("Anthropic client not available; skipping AI response")  # warn and bail out
             return None
         
         try:
             if ENABLE_DISPLAY:
-                print("Sending to OpenAI...", flush=True)  # tell the user we are contacting OpenAI
+                print("Sending to Claude...", flush=True)  # tell the user we are contacting Claude
             
-            chat_response = openai_client.chat.completions.create(
-                model=OPENAI_MODEL,                         # which model to use (e.g. "gpt-3.5-turbo")
+            message_response = anthropic_client.messages.create(
+                model=ANTHROPIC_MODEL,                      # which model to use (e.g. "claude-3-5-haiku-latest")
+                system=SCENARIO_PROMPT,                     # the system prompt sets the AI persona
                 messages=[
-                    {"role": "system", "content": SCENARIO_PROMPT},  # the system prompt sets the AI persona
                     {"role": "user",   "content": message},           # the decoded Morse message is the user turn
                 ],
-                max_tokens=OPENAI_MAX_TOKENS,               # cap the length of the reply
-                temperature=OPENAI_TEMPERATURE,             # control randomness of the reply
+                max_tokens=ANTHROPIC_MAX_TOKENS,            # cap the length of the reply
+                temperature=ANTHROPIC_TEMPERATURE,          # control randomness of the reply
             )
-            
-            ai_response = chat_response.choices[0].message.content.strip()  # extract the text from the API response object
+            text_parts = [
+                block.text for block in message_response.content
+                if getattr(block, "type", None) == "text" and getattr(block, "text", None)
+            ]
+            ai_response = " ".join(text_parts).strip()      # extract plain text from Claude content blocks
+            if not ai_response:
+                logger.warning("Anthropic response did not contain text content")
+                return None
             
             if ENABLE_DISPLAY:
                 print(f"AI Response: {ai_response}\n")          # show the reply on the console
             
-            logger.info(f"OpenAI response: {ai_response}")      # log the reply
+            logger.info(f"Anthropic response: {ai_response}")   # log the reply
             return ai_response                                   # return the reply text to the caller
         
         except Exception as e:
-            logger.error(f"OpenAI API error: {e}")              # log the error
+            logger.error(f"Anthropic API error: {e}")           # log the error
             if ENABLE_DISPLAY:
-                print(f"OpenAI error: {e}\n")                   # show the error on the console
+                print(f"Claude error: {e}\n")                   # show the error on the console
             return None                                          # return None to signal failure
     
     # ── Response delivery ────────────────────────────────────────────────
@@ -353,7 +359,7 @@ class MorseCodeChatbot:
                 print("Morse Code Decoder - Chatbot")   # print the application title
                 mode = "BLE" if USE_BLE else INPUT_METHOD          # choose display label for input mode
                 print(f"Input method: {mode}")
-                print(f"OpenAI: {'enabled' if openai_client else 'disabled (no API key)'}")
+                print(f"Claude: {'enabled' if anthropic_client else 'disabled (no API key)'}")
                 print(f"Bluetooth response: {'enabled' if ENABLE_BT_RESPONSE else 'disabled'}")
                 if USE_BLE:
                     print(f"Scenario: {SCENARIO_PROMPT[:60]}…")    # show the first 60 chars of the scenario
