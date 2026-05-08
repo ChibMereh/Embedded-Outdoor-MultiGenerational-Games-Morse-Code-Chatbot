@@ -34,8 +34,7 @@ small LCD screen.
 6. The AI response is written back to the Arduino via `responseChar`
    (UUID `…def5`).
 7. The Arduino plays the response as buzzer-only Morse first (high tone = dot,
-   low tone = dash), then reveals the response on the top LCD row when the
-   user presses **Send** with no pending word (decode-first workflow).
+   low tone = dash), then automatically shows the response on the top LCD row.
 
 ---
 
