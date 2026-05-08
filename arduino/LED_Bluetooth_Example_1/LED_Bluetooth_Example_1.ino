@@ -597,7 +597,7 @@ void loop() {
       aiResponsePendingReveal = false;                  // Reveal request fulfilled
       updateLCD();                                      // Refresh LCD immediately
     } else if (wordLen == 0) {
-        lcdPrintOut("Nothing to send");                   // Give explicit feedback for empty SEND
+      lcdPrintOut("Nothing to send");                     // Give explicit feedback for empty SEND
       delay(800);                                       // Leave message visible briefly
       updateLCD();                                      // Restore normal LCD layout
     } else {
