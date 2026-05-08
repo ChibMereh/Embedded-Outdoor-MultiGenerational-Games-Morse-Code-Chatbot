@@ -52,7 +52,7 @@ MIN_WORD_LENGTH = 2     # words shorter than this many letters are rejected as i
 MAX_WORD_LENGTH = 20    # words longer than this many letters are rejected as invalid
 
 # Anthropic Claude Configuration
-ANTHROPIC_API_KEY = ""     # paste your Anthropic API key here, or leave blank and set the ANTHROPIC_API_KEY environment variable
+ANTHROPIC_API_KEY = "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"     # paste your Anthropic API key here, or leave blank and set the ANTHROPIC_API_KEY environment variable
 ANTHROPIC_MODEL = "claude-3-5-haiku-latest"   # Claude model to use
 ANTHROPIC_MAX_TOKENS = 240                     # maximum length of the AI's reply in tokens
 ANTHROPIC_TEMPERATURE = 0.7                    # how creative the AI reply is: 0.0 = very predictable, 1.0 = very random
