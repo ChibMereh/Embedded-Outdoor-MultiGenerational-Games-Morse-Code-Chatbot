@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)    # create a logger named after this modul
 # Anthropic client setup – try to import and initialise the Anthropic library
 try:
     from anthropic import Anthropic                                     # import the Anthropic Python client
-    _api_key = ANTHROPIC_API_KEY or os.environ.get("ANTHROPIC_API_KEY", "")  # use key from config, or fall back to environment variable
+    _api_key = ANTHROPIC_API_KEY   # use key from config, or fall back to environment variable
     anthropic_client = Anthropic(api_key=_api_key) if _api_key else None      # create client only if a key is available
     if anthropic_client:
         logger.info("Anthropic client initialized")                     # log success
