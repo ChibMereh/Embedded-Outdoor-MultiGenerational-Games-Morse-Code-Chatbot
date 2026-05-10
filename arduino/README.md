@@ -236,6 +236,5 @@ async def main():
 asyncio.run(main())
 ```
 
-For full integration with the existing chatbot, update `config.py` to set  
-`INPUT_METHOD = "BLUETOOTH"` and point `BLUETOOTH_PORT` to the BLE serial  
-interface or adapt `input_handler.py` to use `bleak`.
+For full integration with the existing chatbot, use the BLE configuration in
+`config.py` and run the Python app with `blehandler.py` as the central.
