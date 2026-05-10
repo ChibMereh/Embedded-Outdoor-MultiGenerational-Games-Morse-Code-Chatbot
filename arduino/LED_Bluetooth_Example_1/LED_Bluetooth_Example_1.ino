@@ -67,7 +67,6 @@ const int pinLedGreen  = 6;  // Green LED - flashes for DOT input (with 220 ohm 
 const int pinLedRed    = 7;  // Red LED   - flashes for DASH and unknown patterns  (with 220 ohm resistor to GND)
 const int pinLedYellow = 8;  // Yellow LED - flashes for SEND and ERASE            (with 220 ohm resistor to GND)
 const int pinBuzzer     = 9;  // Piezo buzzer signal pin (other leg to GND)
-const int pinSpeedPot  = A6; // Potentiometer wiper (optional) for Morse speed (0..3V3 range)
 
 // --- Parallel LCD pin numbers ---
 const int pinLcdRs = A0;  // LCD Register Select pin
@@ -87,8 +86,8 @@ const unsigned int  morseBeepHz    = 700;  // Unified pitch for dot/dash input f
 const unsigned int  dotToneHz      = 1200; // Higher pitch used only during AI-response playback (dot)
 const unsigned int  dashToneHz     = 700;  // Lower pitch used only during AI-response playback (dash)
 const unsigned int  letterToneHz   = 950;  // Decoded-letter pitch (distinct from input feedback)
-const unsigned long dotMinMs       = 90;   // Fastest dot duration when pot is at minimum
-const unsigned long dotMaxMs       = 260;  // Slowest dot duration when pot is at maximum
+const unsigned long inputDotMs     = 90;   // Fixed dot feedback duration for DIT input
+const unsigned long inputDashMs    = 270;  // Fixed dash feedback duration for DAH input
 
 // --- Morse playback speeds (for playing AI response as Morse on LED) ---
 const unsigned long dotMs    = 200;   // LED on time for a dot (short flash)
@@ -198,15 +197,6 @@ void lcdPrintOut(const char *content) {
   lcdPrintLabeled(1, "OUT:", content);
 }
 
-unsigned long readDotDurationMs() {
-  int raw = analogRead(pinSpeedPot);                          // 0..1023
-  return (unsigned long)map(raw, 0, 1023, dotMinMs, dotMaxMs);
-}
-
-unsigned long readDashDurationMs() {
-  return readDotDurationMs() * 3UL;
-}
-
 // --- Helper functions ---
 
 // Check if a button was just pressed (handles debounce so we only see one press per push)
@@ -264,12 +254,12 @@ void playDashTone(unsigned long durationMs) {
 
 // Play green feedback for dot entry
 void playGreenFeedback() {
-  signalDot(readDotDurationMs());   // Dot-style light+tone feedback (pot-adjustable)
+  signalDot(inputDotMs);            // Dot-style light+tone feedback
 }
 
 // Play red feedback for dash entry and decode errors
 void playRedFeedback() {
-  signalDash(readDashDurationMs()); // Dash-style light+tone feedback (pot-adjustable)
+  signalDash(inputDashMs);          // Dash-style light+tone feedback
 }
 
 // Play yellow feedback for decoded-letter success (distinct LED + distinct tone)
@@ -462,8 +452,6 @@ void setup() {
   pinMode(pinKeyerDah, INPUT_PULLUP);  // DAH (dash) paddle input pin
   pinMode(pinErase,     INPUT_PULLUP);  // ERASE button pin
   pinMode(pinSend,      INPUT_PULLUP);  // SEND button pin
-  pinMode(pinSpeedPot,  INPUT_PULLDOWN); // Keep A6 stable when no speed pot is connected
-
   // Set the LED pins as outputs so we can turn them on and off
   pinMode(pinLedGreen,  OUTPUT);   // Green LED pin
   pinMode(pinLedRed,    OUTPUT);   // Red LED pin

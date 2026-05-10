@@ -54,15 +54,6 @@ Typical wiring: each channel → 220 Ω resistor → LED anode; LED cathode → 
 
 Wire the buzzer signal leg to **D9** and the other leg to **GND**.
 
-### Optional speed potentiometer (Morse timing)
-
-| Pin | Function |
-|-----|----------|
-| A6  | Potentiometer wiper input (adjusts dot speed; dash is 3× dot) |
-
-Connect one potentiometer outer pin to **3.3V**, the other outer pin to **GND**, and the wiper to **A6**.
-If no potentiometer is connected, the sketch uses an internal pulldown on A6 and defaults to the fastest dot setting.
-
 ### LCD (HD44780 — parallel 4-bit mode, no I2C backpack)
 
 The sketch drives the LCD directly in **4-bit parallel mode** using the built-in `LiquidCrystal` library.
@@ -122,8 +113,8 @@ The Raspberry Pi 4 connects to this peripheral as a BLE central using a library 
 
 1. **Power on** the Arduino — the LCD shows "Ready BLE OK" and the green LED flashes.  
 2. **Enter a character** using the iambic paddle:  
-   - Press **DIT paddle** (Tip → D2) = dot (`.`) — green LED + higher buzzer tone (duration follows speed pot)  
-   - Press **DAH paddle** (Ring1 → D3) = dash (`-`) — red LED + lower buzzer tone (3× dot duration)  
+   - Press **DIT paddle** (Tip → D2) = dot (`.`) — green LED + higher buzzer tone  
+   - Press **DAH paddle** (Ring1 → D3) = dash (`-`) — red LED + lower buzzer tone  
    The current outgoing pattern is shown on the **OUT:** line in real time.  
 3. **After 800 ms of inactivity** the pattern is automatically decoded:  
    - Recognised character → appended to the **OUT:** line with a **distinct decoded-letter feedback** (yellow LED + different tone).  
