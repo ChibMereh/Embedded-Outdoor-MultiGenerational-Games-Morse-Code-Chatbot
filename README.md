@@ -132,7 +132,7 @@ SCENARIO_PROMPT = (
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `USE_BLE` | `True` | Use BLE (Nano 33 BLE) |
+| BLE transport | Fixed | BLE is the only supported transport mode |
 | `BLE_DEVICE_NAME` | `"MorseEncoder"` | Must match `BLE.setLocalName()` in the sketch |
 | `BLE_SCAN_TIMEOUT` | `30.0` | Seconds to scan before giving up |
 | `MESSAGE_TIMEOUT_S` | `8.0` | Seconds of silence before message is sent to Claude |
