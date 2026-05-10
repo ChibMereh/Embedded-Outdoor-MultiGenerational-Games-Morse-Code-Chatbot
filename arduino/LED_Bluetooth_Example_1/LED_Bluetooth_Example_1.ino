@@ -347,6 +347,7 @@ void finalizeCharacter() {
     if (wordLen < maxWord) {                                       // If the word isn't too long yet
       wordBuffer[wordLen++] = ch;                                   // Add the letter to the word
       wordBuffer[wordLen]   = '\0';                                 // Add the end-of-string marker
+      // Deliberately do not notify wordChar here: full word is sent only from sendWord() on SEND button press.
     }
     playLetterFeedback();                                            // Play distinct decoded-letter feedback
   } else {                                                          // Pattern not recognised
