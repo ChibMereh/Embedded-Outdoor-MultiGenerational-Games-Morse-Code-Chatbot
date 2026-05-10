@@ -7,69 +7,69 @@ import time         # provides time.time() for recording when signals occur
 import logging      # provides the logging framework for recording diagnostic messages
 import threading    # provides threading.Thread for the background Bluetooth read loop
 from config import (    # import hardware and timing settings from config.py
-    GPIO_PIN,           # Raspberry Pi BCM pin number where the Morse button is wired
-    GPIO_MODE,          # pin numbering scheme: "BCM" or "BOARD"
-    DOT_DURATION,       # expected duration of a dot in milliseconds
-    DASH_DURATION,      # expected duration of a dash in milliseconds
-    CHARACTER_GAP,      # silence duration that separates two letters
-    WORD_GAP,           # silence duration that separates two words
-    INPUT_METHOD,       # which input mode to use: "GPIO", "SERIAL", or "BLUETOOTH"
-    SERIAL_PORT,        # USB serial device file (used in SERIAL mode)
-    SERIAL_BAUDRATE,    # baud rate for the USB serial connection
-    BLUETOOTH_PORT,     # Bluetooth serial device file (used in BLUETOOTH mode)
-    BLUETOOTH_BAUDRATE, # baud rate for the Bluetooth serial connection
+    GPIOPIN,           # Raspberry Pi BCM pin number where the Morse button is wired
+    GPIOMODE,          # pin numbering scheme: "BCM" or "BOARD"
+    DOTDURATION,       # expected duration of a dot in milliseconds
+    DASHDURATION,      # expected duration of a dash in milliseconds
+    CHARACTERGAP,      # silence duration that separates two letters
+    WORDGAP,           # silence duration that separates two words
+    INPUTMETHOD,       # which input mode to use: "GPIO", "SERIAL", or "BLUETOOTH"
+    SERIALPORT,        # USB serial device file (used in SERIAL mode)
+    SERIALBAUDRATE,    # baud rate for the USB serial connection
+    BLUETOOTHPORT,     # Bluetooth serial device file (used in BLUETOOTH mode)
+    BLUETOOTHBAUDRATE, # baud rate for the Bluetooth serial connection
 )
 
-logger = logging.getLogger(__name__)    # create a logger named after this module (input_handler)
+logger = logging.getLogger(__name__)    # create a logger named after this module (inputhandler)
 
 # Try to import RPi.GPIO (only available on a Raspberry Pi)
 try:
     import RPi.GPIO as GPIO     # library for controlling Raspberry Pi GPIO pins
-    RASPBERRY_PI = True         # flag: we are running on a Raspberry Pi with GPIO available
+    RASPBERRYPI = True         # flag: we are running on a Raspberry Pi with GPIO available
 except ImportError:
-    RASPBERRY_PI = False        # flag: GPIO library not available (running on a non-Pi machine)
+    RASPBERRYPI = False        # flag: GPIO library not available (running on a non-Pi machine)
     logger.warning("RPi.GPIO not available. GPIO input will not work.")  # warn the user
 
 # Try to import pyserial (needed for both SERIAL and BLUETOOTH modes)
 try:
     import serial               # pyserial library for communicating over serial ports
-    SERIAL_AVAILABLE = True     # flag: pyserial is installed and serial communication is possible
+    SERIALAVAILABLE = True     # flag: pyserial is installed and serial communication is possible
 except ImportError:
-    SERIAL_AVAILABLE = False    # flag: pyserial not installed; serial and Bluetooth modes will not work
+    SERIALAVAILABLE = False    # flag: pyserial not installed; serial and Bluetooth modes will not work
     logger.warning("pyserial not available. Serial and Bluetooth input will not work.")  # warn the user
 
 
 class GPIOInputHandler:
     """Handles morse code input via GPIO pin on Raspberry Pi"""
     
-    def __init__(self, pin=GPIO_PIN):
-        if not RASPBERRY_PI:
+    def __init__(self, pin=GPIOPIN):
+        if not RASPBERRYPI:
             raise RuntimeError("RPi.GPIO is required for GPIO input")   # stop if we cannot use GPIO
         
         self.pin = pin              # the BCM pin number to listen on
-        self.last_state = 0         # last known pin state: 0 = LOW (released), 1 = HIGH (pressed)
+        self.laststate = 0         # last known pin state: 0 = LOW (released), 1 = HIGH (pressed)
         self.callbacks = []         # list of functions to call when the pin state changes
         
         # Setup GPIO
         GPIO.setmode(GPIO.BCM)                          # use BCM pin numbering
         GPIO.setup(self.pin, GPIO.IN)                   # configure the pin as an input
         GPIO.add_event_detect(self.pin, GPIO.BOTH,      # detect both rising and falling edges
-                              callback=self._gpio_callback)  # call _gpio_callback when an edge is detected
+                              callback=self.gpiocallback)  # call gpiocallback when an edge is detected
         
         logger.info(f"GPIO input handler initialized on pin {self.pin}")  # log that setup is done
     
-    def _gpio_callback(self, channel):
+    def gpiocallback(self, channel):
         """Internal callback for GPIO events"""
         state = GPIO.input(self.pin)    # read the current logic level of the pin (0 or 1)
         
-        if state != self.last_state:    # only act if the state actually changed
-            self.last_state = state     # remember the new state for the next comparison
+        if state != self.laststate:    # only act if the state actually changed
+            self.laststate = state     # remember the new state for the next comparison
             timestamp = time.time()     # record when the transition happened
             
             for callback in self.callbacks:
                 callback(state, timestamp)  # notify each registered callback of the state change
     
-    def register_callback(self, callback):
+    def registercallback(self, callback):
         """Register a callback function for state changes"""
         self.callbacks.append(callback)     # add the function to the notification list
     
@@ -82,8 +82,8 @@ class GPIOInputHandler:
 class SerialInputHandler:
     """Handles morse code input via serial port"""
     
-    def __init__(self, port=SERIAL_PORT, baudrate=SERIAL_BAUDRATE):
-        if not SERIAL_AVAILABLE:
+    def __init__(self, port=SERIALPORT, baudrate=SERIALBAUDRATE):
+        if not SERIALAVAILABLE:
             raise RuntimeError("pyserial is required for serial input")     # stop if pyserial is missing
         
         self.port = port            # the serial device file (e.g. /dev/ttyUSB0)
@@ -99,7 +99,7 @@ class SerialInputHandler:
             logger.error(f"Failed to open serial port: {e}")   # log the error
             raise                                               # re-raise so the caller knows setup failed
     
-    def register_callback(self, callback):
+    def registercallback(self, callback):
         """Register a callback function for data received"""
         self.callbacks.append(callback)     # add the function to the notification list
     
@@ -136,8 +136,8 @@ class BluetoothInputHandler:
     dispatches decoded signal events to registered callbacks.
     """
     
-    def __init__(self, port=BLUETOOTH_PORT, baudrate=BLUETOOTH_BAUDRATE):
-        if not SERIAL_AVAILABLE:
+    def __init__(self, port=BLUETOOTHPORT, baudrate=BLUETOOTHBAUDRATE):
+        if not SERIALAVAILABLE:
             raise RuntimeError("pyserial is required for Bluetooth input")  # stop if pyserial is missing
         
         self.port = port            # the Bluetooth serial device file (e.g. /dev/rfcomm0)
@@ -145,7 +145,7 @@ class BluetoothInputHandler:
         self.serial = None          # will hold the open serial port object
         self.running = False        # True while the background thread is reading
         self.callbacks = []         # functions to notify when a signal event is detected
-        self._thread = None         # the background thread that reads from the port
+        self.thread = None         # the background thread that reads from the port
         
         try:
             self.serial = serial.Serial(port, baudrate, timeout=1)  # open the Bluetooth serial port with 1-second timeout
@@ -154,19 +154,19 @@ class BluetoothInputHandler:
             logger.error(f"Failed to open Bluetooth port {port}: {e}")  # log the error
             raise                                                        # re-raise so the caller knows setup failed
     
-    def register_callback(self, callback):
+    def registercallback(self, callback):
         """Register a callback function for detected signals"""
         self.callbacks.append(callback)     # add the function to the notification list
     
-    def _trigger_callback(self, signal_type, duration=0):
+    def triggercallback(self, signaltype, duration=0):
         """Dispatch a signal event to all registered callbacks"""
         for callback in self.callbacks:
             try:
-                callback(signal_type, duration)     # call each registered function with the signal type and duration
+                callback(signaltype, duration)     # call each registered function with the signal type and duration
             except Exception as e:
                 logger.error(f"Error in Bluetooth callback: {e}")   # log but don't crash on callback errors
     
-    def _read_loop(self):
+    def readloop(self):
         """Background thread: read bytes from Bluetooth and emit signal events"""
         logger.info("Bluetooth read loop started")
         while self.running:                             # keep reading as long as the handler is active
@@ -178,18 +178,18 @@ class BluetoothInputHandler:
                 char = byte.decode("ascii", errors="ignore")    # convert the byte to ASCII (ignore non-ASCII bytes)
                 
                 if char == ".":
-                    self._trigger_callback("DOT", DOT_DURATION)         # dot received
+                    self.triggercallback("DOT", DOTDURATION)         # dot received
                 elif char == "-":
-                    self._trigger_callback("DASH", DASH_DURATION)       # dash received
+                    self.triggercallback("DASH", DASHDURATION)       # dash received
                 elif char == " ":
-                    self._trigger_callback("CHARACTER_GAP", CHARACTER_GAP)  # space = end of a letter
+                    self.triggercallback("CHARACTERGAP", CHARACTERGAP)  # space = end of a letter
                 elif char == "/":
-                    self._trigger_callback("WORD_GAP", WORD_GAP)        # slash = end of a word
+                    self.triggercallback("WORDGAP", WORDGAP)        # slash = end of a word
                 elif char == "\n":
                     # End of message: first flush any pending word, then notify message end.
-                    # on_word_gap() is safe to call on empty state (no duplicate processing).
-                    self._trigger_callback("WORD_GAP", WORD_GAP)        # complete any open word first
-                    self._trigger_callback("MESSAGE_END", 0)            # then signal that the full message is done
+                    # onwordgap() is safe to call on empty state (no duplicate processing).
+                    self.triggercallback("WORDGAP", WORDGAP)        # complete any open word first
+                    self.triggercallback("MESSAGEEND", 0)             # then signal that the full message is done
                 # Ignore carriage returns and other control characters
                 
             except serial.SerialException as e:
@@ -205,15 +205,15 @@ class BluetoothInputHandler:
         if self.running:
             return                      # already running – do not start a second thread
         self.running = True             # mark as running before starting the thread
-        self._thread = threading.Thread(target=self._read_loop, daemon=True)  # daemon thread exits with the main program
-        self._thread.start()            # start the background read loop
+        self.thread = threading.Thread(target=self.readloop, daemon=True)  # daemon thread exits with the main program
+        self.thread.start()            # start the background read loop
         logger.info("Bluetooth input handler started")
     
     def stop(self):
         """Stop the background reading thread"""
         self.running = False            # signal the read loop to exit after the next read
-        if self._thread:
-            self._thread.join(timeout=2)    # wait up to 2 seconds for the thread to finish
+        if self.thread:
+            self.thread.join(timeout=2)    # wait up to 2 seconds for the thread to finish
         logger.info("Bluetooth input handler stopped")
     
     def send(self, data):
@@ -244,21 +244,21 @@ class MorseInputProcessor:
     """Processes raw input signals and detects dots, dashes, and gaps"""
     
     def __init__(self):
-        self.signal_start_time = None       # timestamp when the current button press began
-        self.last_signal_end_time = None    # timestamp when the previous button press ended
+        self.signalstarttime = None       # timestamp when the current button press began
+        self.lastsignalendtime = None    # timestamp when the previous button press ended
         self.callbacks = []                 # functions to call when a dot, dash, or gap is detected
         
         # Timing thresholds (in milliseconds)
-        self.dot_threshold = DOT_DURATION * 1.5         # presses shorter than this are dots (150 ms default)
-        self.dash_threshold = DASH_DURATION * 1.5       # presses shorter than this (but longer than a dot) are dashes (450 ms default)
-        self.character_gap_threshold = CHARACTER_GAP    # silences longer than this separate two letters
-        self.word_gap_threshold = WORD_GAP              # silences longer than this separate two words
+        self.dotthreshold = DOTDURATION * 1.5         # presses shorter than this are dots (150 ms default)
+        self.dashthreshold = DASHDURATION * 1.5       # presses shorter than this (but longer than a dot) are dashes (450 ms default)
+        self.charactergapthreshold = CHARACTERGAP    # silences longer than this separate two letters
+        self.wordgapthreshold = WORDGAP              # silences longer than this separate two words
     
-    def register_callback(self, callback):
+    def registercallback(self, callback):
         """Register callback for detected signals"""
         self.callbacks.append(callback)     # add the function to the notification list
     
-    def process_signal(self, state, timestamp):
+    def processsignal(self, state, timestamp):
         """
         Process GPIO state changes
         
@@ -267,41 +267,41 @@ class MorseInputProcessor:
             timestamp (float): Unix timestamp of state change
         """
         if state == 1:                              # button pressed down – record the start time
-            self.signal_start_time = timestamp
+            self.signalstarttime = timestamp
         else:                                       # button released – measure the press duration
-            if self.signal_start_time:
-                duration = (timestamp - self.signal_start_time) * 1000  # convert seconds to milliseconds
+            if self.signalstarttime:
+                duration = (timestamp - self.signalstarttime) * 1000  # convert seconds to milliseconds
                 
                 # Check for gaps since last signal (detect character or word gaps)
-                if self.last_signal_end_time:
-                    gap = (self.signal_start_time - self.last_signal_end_time) * 1000  # gap in milliseconds
+                if self.lastsignalendtime:
+                    gap = (self.signalstarttime - self.lastsignalendtime) * 1000  # gap in milliseconds
                     
-                    if gap >= self.word_gap_threshold:
-                        self._trigger_callback("WORD_GAP", gap)         # long silence = end of a word
-                    elif gap >= self.character_gap_threshold:
-                        self._trigger_callback("CHARACTER_GAP", gap)    # medium silence = end of a letter
+                    if gap >= self.wordgapthreshold:
+                        self.triggercallback("WORDGAP", gap)         # long silence = end of a word
+                    elif gap >= self.charactergapthreshold:
+                        self.triggercallback("CHARACTERGAP", gap)    # medium silence = end of a letter
                 
                 # Determine if dot or dash based on press duration
-                if duration < self.dot_threshold:
-                    self._trigger_callback("DOT", duration)             # short press = dot
-                elif duration < self.dash_threshold:
-                    self._trigger_callback("DASH", duration)            # longer press = dash
+                if duration < self.dotthreshold:
+                    self.triggercallback("DOT", duration)             # short press = dot
+                elif duration < self.dashthreshold:
+                    self.triggercallback("DASH", duration)            # longer press = dash
                 else:
                     logger.warning(f"Signal duration too long: {duration}ms")  # press was too long to be a valid symbol
                 
-                self.last_signal_end_time = timestamp   # remember when this press ended for the next gap check
-                self.signal_start_time = None           # clear start time (no press currently in progress)
+                self.lastsignalendtime = timestamp   # remember when this press ended for the next gap check
+                self.signalstarttime = None           # clear start time (no press currently in progress)
     
-    def _trigger_callback(self, signal_type, duration):
+    def triggercallback(self, signaltype, duration):
         """Trigger all registered callbacks"""
         for callback in self.callbacks:
             try:
-                callback(signal_type, duration)     # call each function with the signal type and duration
+                callback(signaltype, duration)     # call each function with the signal type and duration
             except Exception as e:
                 logger.error(f"Error in callback: {e}")  # log but don't crash on callback errors
 
 
-def create_input_handler(method=INPUT_METHOD):
+def createinputhandler(method=INPUTMETHOD):
     """
     Factory function to create appropriate input handler.
 
