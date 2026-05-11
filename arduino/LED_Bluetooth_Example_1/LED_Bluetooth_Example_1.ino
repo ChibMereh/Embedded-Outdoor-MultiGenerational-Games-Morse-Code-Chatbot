@@ -44,6 +44,7 @@ const int pinLedGreen  = 6;  // Green LED - flashes for DOT input
 const int pinLedRed    = 7;  // Red LED   - flashes for DASH and unknown patterns  
 const int pinLedYellow = 8;  // Yellow LED - flashes for SEND and ERASE            
 const int pinBuzzer     = 9;  // Piezo buzzer signal 
+const int pinSpeedPot  = A6; // Potentiometer wiper (optional) for Morse speed
 
 // --- Parallel LCD pin numbers ---
 const int pinLcdRs = A0;  // LCD Register Select pin
@@ -63,8 +64,8 @@ const unsigned int  morseBeepHz    = 700;
 const unsigned int  dotToneHz      = 1200; // Higher pitch 
 const unsigned int  dashToneHz     = 700;  // Lower pitch 
 const unsigned int  letterToneHz   = 950;  // Decoded-letter 
-const unsigned long inputDotMs     = 90;   // Fixed dot feedback 
-const unsigned long inputDashMs    = 270;  // Fixed dash feedback 
+const unsigned long dotMinMs       = 90;   // Fastest dot feedback
+const unsigned long dotMaxMs       = 260;  // Slowest dot feedback
 
 // --- Morse playback speeds (for playing AI response as Morse on LED) ---
 const unsigned long dotMs    = 200;   // LED on time for a dot (short flash)
@@ -174,6 +175,20 @@ void lcdPrintOut(const char *content) {
   lcdPrintLabeled(1, "OUT:", content);
 }
 
+unsigned long readDotDurationMs() {
+  int raw = analogRead(pinSpeedPot);                          // 0..1023
+  return (unsigned long)map(raw, 0, 1023, dotMinMs, dotMaxMs);
+}
+
+unsigned long readDashDurationMs() {
+  return readDotDurationMs() * 3UL;
+}
+
+// --- Helper functions ---
+
+// Check if a button was just pressed (handles debounce so we only see one press per push)
+// pin = which Arduino pin to read
+// lastRaw, edgeTime, held = the tracking variables for that button
 bool pressed(int pin, bool &lastRaw, unsigned long &edgeTime, bool &held) {
   bool raw = digitalRead(pin);              // Read the button pin (LOW = pressed, HIGH = released)
   if (raw != lastRaw) {                     // If the reading changed since last time
@@ -224,12 +239,12 @@ void playDashTone(unsigned long durationMs) {
 
 // Play green feedback for dot entry
 void playGreenFeedback() {
-  signalDot(inputDotMs);            
+  signalDot(readDotDurationMs());   // Dot-style light+tone feedback (pot-adjustable)
 }
 
 // Play red feedback for dash entry and decode errors
 void playRedFeedback() {
-  signalDash(inputDashMs);          
+  signalDash(readDashDurationMs()); // Dash-style light+tone feedback (pot-adjustable)
 }
 
 // Play yellow feedback for decoded-letter success
@@ -311,8 +326,8 @@ void finalizeCharacter() {
     recognChar.writeValue((uint8_t *)s, 1);                         // Send the letter over BLE
     if (wordLen < maxWord) {                                       // If the word isn't too long yet
       wordBuffer[wordLen++] = ch;                                   // Add the letter to the word
-      wordBuffer[wordLen]   = '\0';                                 
-     
+      wordBuffer[wordLen]   = '\0';                                 // Add the end-of-string marker
+      wordChar.writeValue((uint8_t *)wordBuffer, (unsigned int)wordLen);  // Send updated word over BLE
     }
     playLetterFeedback();                                            // Play distinct decoded-letter feedback
   } else {                                                          // Pattern not recognised
@@ -417,6 +432,8 @@ void setup() {
   pinMode(pinKeyerDah, INPUT_PULLUP);  // dash paddle input pin
   pinMode(pinErase,     INPUT_PULLUP);  // ERASE button pin
   pinMode(pinSend,      INPUT_PULLUP);  // SEND button pin
+  pinMode(pinSpeedPot,  INPUT_PULLDOWN); // Keep A6 stable when no speed pot is connected
+
   // Set the LED pins as outputs so we can turn them on and off
   pinMode(pinLedGreen,  OUTPUT);   // Green LED pin
   pinMode(pinLedRed,    OUTPUT);   // Red LED pin
