@@ -113,10 +113,13 @@ class MorseCodeChatbot:
 
         def timer(generation):
             time.sleep(MESSAGETIMEOUTS)           # wait for the configured silence period
+            should_process = False
             with self.timeoutlock:
                 if generation == self.timeoutgeneration:  # only fire if we are still the newest timer
                     logger.info("Message timeout – treating accumulated words as full message")
-                    self.onmessageend()           # send the accumulated words to Claude
+                    should_process = True
+            if should_process:
+                self.onmessageend()           # send the accumulated words to Claude
 
         t = threading.Thread(target=timer, args=(gen,), daemon=True,
                              name="MsgTimeoutThread")   # create a background daemon thread
