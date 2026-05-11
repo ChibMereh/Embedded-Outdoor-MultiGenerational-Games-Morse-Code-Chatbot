@@ -58,7 +58,7 @@ small LCD screen.
 ### Recommended OS image
 
 - **Use:** Raspberry Pi OS Lite (64-bit), Bookworm
-- **Fallback:** 32-bit if you specifically need it for your deployment constraints
+- **Fallback:** 32-bit only if you need compatibility with a specific legacy dependency
 
 ### 1. Enable Bluetooth
 
@@ -80,8 +80,9 @@ This installs:
 
 | Package | Purpose |
 |---------|---------|
-| `bleak>=0.21` | BLE GATT central |
+| `bleak>=0.21` | BLE GATT central (replaces classic Bluetooth serial) |
 | `anthropic>=0.40.0` | Anthropic Python client |
+| `pyserial>=3.5` | Kept for legacy GPIO/serial modes |
 
 ### 3. Set your Anthropic API key
 
@@ -132,7 +133,7 @@ SCENARIO_PROMPT = (
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| BLE transport | Fixed | BLE is the only supported transport mode |
+| `USE_BLE` | `True` | Use BLE (Nano 33 BLE) vs classic Bluetooth serial |
 | `BLE_DEVICE_NAME` | `"MorseEncoder"` | Must match `BLE.setLocalName()` in the sketch |
 | `BLE_SCAN_TIMEOUT` | `30.0` | Seconds to scan before giving up |
 | `MESSAGE_TIMEOUT_S` | `8.0` | Seconds of silence before message is sent to Claude |
@@ -180,6 +181,7 @@ The Pi will scan for the Arduino, connect automatically, and wait for words.
 │       └── LED_Bluetooth_Example_1.ino   # Arduino sketch
 ├── ble_handler.py      # BLE central (bleak) — scan, connect, notify, write
 ├── config.py           # All tunable settings including SCENARIO_PROMPT
+├── input_handler.py    # GPIO / serial / classic-BT handlers (legacy modes)
 ├── main.py             # Application entry point & chatbot logic
 ├── morse_decoder.py    # Morse ↔ text codec
 ├── requirements.txt    # Python dependencies

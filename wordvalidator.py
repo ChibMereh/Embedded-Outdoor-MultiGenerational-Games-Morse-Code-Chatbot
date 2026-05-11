@@ -66,6 +66,28 @@ class WordValidator:
         
         return wordupper in self.dictionary    # True if the word is in the set, False if not
     
+    def getsuggestions(self, word, maxsuggestions=5):
+        """
+        Get word suggestions for a misspelled word
+        
+        Args:
+            word (str): Misspelled word
+            maxsuggestions (int): Maximum suggestions to return
+        
+        Returns:
+            list: List of suggested words
+        """
+        wordupper = word.upper()   # convert to uppercase for consistent comparison
+        suggestions = []            # will hold the words found to be similar to the misspelled word
+        
+        for dictword in self.dictionary:
+            if self.levenshteindistance(wordupper, dictword) <= 2:  # a distance ≤ 2 means at most 2 edits apart
+                suggestions.append(dictword)           # this word is close enough – add it to suggestions
+                if len(suggestions) >= maxsuggestions:
+                    break                               # stop early once we have enough suggestions
+        
+        return suggestions  # return the list of similar words
+    
     @staticmethod
     def levenshteindistance(s1, s2):
         """Calculate Levenshtein distance between two strings"""

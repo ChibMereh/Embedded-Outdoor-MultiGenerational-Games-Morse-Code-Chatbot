@@ -1,18 +1,17 @@
-/*
- * Morse Code Encoder 
- * By Chibuikem Onwumereh
- * Student Number C23461804
+/**
+ * LED_Bluetooth_Example_1.ino
+ * Morse Code Encoder - Simple Version for Arduino Nano 33 BLE
  *
  * HARDWARE (all pins changeable below)
- *   Pin 2 - DOT paddle  (TRRS Tip   → D2, TRRS Sleeve → GND) 
- *   Pin 3 - DASH paddle  (TRRS Ring1 → D3, TRRS Sleeve → GND) —
+ *   Pin 2 - DIT paddle  (TRRS Tip   → D2, TRRS Sleeve → GND) — short press always = DOT
+ *   Pin 3 - DAH paddle  (TRRS Ring1 → D3, TRRS Sleeve → GND) — press always = DASH
  *   Pin 4 - ERASE button      (connect between pin and GND, uses INPUT_PULLUP)
  *   Pin 5 - SEND button       (connect between pin and GND, uses INPUT_PULLUP)
  *   Pin 6 - GREEN LED     (with 220 ohm resistor to GND) - flashes for DIT/dot input
  *   Pin 7 - RED LED       (with 220 ohm resistor to GND) - flashes for DAH/dash input
  *   Pin 8 - YELLOW LED    (with 220 ohm resistor to GND) - flashes for SEND/ERASE and decoded-letter success
- *   Pin 9 - PIEZO BUZZER  - beeps for dot/dash
- *   Standard HD44780 LCD 14x2 1602A
+ *   Pin 9 - PIEZO BUZZER  (signal pin to D9, other pin to GND) - beeps for dot/dash
+ *   Standard HD44780 LCD 14x2 (parallel 4-bit mode, no I2C backpack needed)
  *     Pin A0 (RS) -> RS  pin on LCD
  *     Pin A1 (EN) -> EN  pin on LCD
  *     Pin A2 (D4) -> D4  pin on LCD
@@ -21,7 +20,31 @@
  *     Pin A5 (D7) -> D7  pin on LCD
  *     5V          -> VDD pin on LCD
  *     GND         -> VSS pin on LCD
-
+ *     Potentiometer (wiper to V0) or 10 kΩ resistor to GND for contrast
+ *     220 Ω resistor + 5V -> A (backlight anode); K (backlight cathode) -> GND
+ *
+ * LIBRARIES NEEDED (install via Arduino Library Manager)
+ *   ArduinoBLE
+ *   LiquidCrystal (built into the Arduino IDE)
+ *
+ * TRRS WIRING (3.5mm 4-pole jack)
+ *   Tip   -> Arduino D2 (dit / dot paddle)
+ *   Ring1 -> Arduino D3 (dah / dash paddle)
+ *   Ring2 -> not connected
+ *   Sleeve-> Arduino GND
+ *
+ * HOW IT WORKS
+ *   1. Press DIT paddle (Tip) = DOT; press DAH paddle (Ring1) = DASH
+ *   2. After 800ms of no input, the pattern is decoded into a letter
+ *      - YELLOW LED flashes with a distinct tone for a good decode, RED for unknown pattern
+ *   3. Press SEND to transmit the word via Bluetooth to the computer
+ *      - YELLOW LED flashes to confirm
+ *   4. Press ERASE to clear everything and start again
+ *      - YELLOW LED flashes to confirm
+ *   5. When the AI sends a reply, it plays first as Morse on the buzzer only
+ *      (high tone = dot, low tone = dash), then automatically shows the text
+ *      on the LCD top row.
+ *
  * BLE (Bluetooth) service ID: 12345678-1234-5678-1234-56789abcdef0
  *   Channel def1 - current Morse pattern  (readable/notifiable)
  *   Channel def2 - decoded letter         (readable/notifiable)
@@ -36,14 +59,15 @@
 
 // --- Pin numbers ---
 // These tell the Arduino which pin each input and LED are on
-const int pinKeyer      = 2;  // dot paddle 
-const int pinKeyerDah  = 3;  // dash paddle 
-const int pinErase      = 4;  // ERASE button 
-const int pinSend       = 5;  // SEND button
-const int pinLedGreen  = 6;  // Green LED - flashes for DOT input 
-const int pinLedRed    = 7;  // Red LED   - flashes for DASH and unknown patterns  
-const int pinLedYellow = 8;  // Yellow LED - flashes for SEND and ERASE            
-const int pinBuzzer     = 9;  // Piezo buzzer signal 
+const int pinKeyer      = 2;  // DIT (dot) paddle – TRRS Tip → D2, Sleeve → GND
+const int pinKeyerDah  = 3;  // DAH (dash) paddle – TRRS Ring1 → D3, Sleeve → GND
+const int pinErase      = 4;  // ERASE button connected to pin 4
+const int pinSend       = 5;  // SEND button connected to pin 5
+const int pinLedGreen  = 6;  // Green LED - flashes for DOT input (with 220 ohm resistor to GND)
+const int pinLedRed    = 7;  // Red LED   - flashes for DASH and unknown patterns  (with 220 ohm resistor to GND)
+const int pinLedYellow = 8;  // Yellow LED - flashes for SEND and ERASE            (with 220 ohm resistor to GND)
+const int pinBuzzer     = 9;  // Piezo buzzer signal pin (other leg to GND)
+const int pinSpeedPot  = A6; // Potentiometer wiper (optional) for Morse speed (0..3V3 range)
 
 // --- Parallel LCD pin numbers ---
 const int pinLcdRs = A0;  // LCD Register Select pin
@@ -58,23 +82,23 @@ const unsigned long debounceMs     = 50;   // Wait 50ms for button to stop bounc
 const unsigned long charTimeoutMs = 800;  // Wait 800ms of silence before decoding a letter
 const unsigned long ledFlashMs    = 200;  // LED stays on for 200ms when it flashes
 const unsigned long lcdScrollMs   = 400;  // How often the LCD scrolls long text (every 400ms)
-// Dot/dash are selected by dedicated paddles 
-const unsigned int  morseBeepHz    = 700;  
-const unsigned int  dotToneHz      = 1200; // Higher pitch 
-const unsigned int  dashToneHz     = 700;  // Lower pitch 
-const unsigned int  letterToneHz   = 950;  // Decoded-letter 
-const unsigned long inputDotMs     = 90;   // Fixed dot feedback 
-const unsigned long inputDashMs    = 270;  // Fixed dash feedback 
+// Dot/dash are selected by dedicated paddles (D2=DIT, D3=DAH); hold-time debug logging was removed.
+const unsigned int  morseBeepHz    = 700;  // Unified pitch for dot/dash input feedback – same tone, different durations (like real Morse)
+const unsigned int  dotToneHz      = 1200; // Higher pitch used only during AI-response playback (dot)
+const unsigned int  dashToneHz     = 700;  // Lower pitch used only during AI-response playback (dash)
+const unsigned int  letterToneHz   = 950;  // Decoded-letter pitch (distinct from input feedback)
+const unsigned long dotMinMs       = 90;   // Fastest dot duration when pot is at minimum
+const unsigned long dotMaxMs       = 260;  // Slowest dot duration when pot is at maximum
 
 // --- Morse playback speeds (for playing AI response as Morse on LED) ---
 const unsigned long dotMs    = 200;   // LED on time for a dot (short flash)
 const unsigned long dashMs   = 600;   // LED on time for a dash (long flash)
-const unsigned long elemGap  = 200;   // Gap between dots/dashes 
+const unsigned long elemGap  = 200;   // Gap between dots/dashes within one letter
 const unsigned long charGap  = 600;   // Gap between letters
 const unsigned long wordGap  = 1400;  // Gap between words
 
 // --- Size limits ---
-const int maxPattern        = 8;    // Longest Morse pattern is 7 symbols 
+const int maxPattern        = 8;    // Longest Morse pattern is 7 symbols (e.g. "...-..-") + 1 for end marker
 const int maxWord           = 50;   // Maximum number of letters in a word
 const int lcdCols           = 14;   // LCD screen has 14 columns
 const int lcdRows           = 2;    // LCD screen has 2 rows
@@ -144,10 +168,10 @@ bool eraseLastRaw = HIGH;  unsigned long eraseEdgeTime = 0;  bool eraseHeld = fa
 bool sendLastRaw  = HIGH;  unsigned long sendEdgeTime  = 0;  bool sendHeld  = false;  // SEND button state
 
 // --- Forward declarations ---
-void updateLCD();  
+void updateLCD();  // Declared here because finalizeCharacter() (line ~236) calls updateLCD() which is defined later in the file
 void lcdPrint(int row, const char *s);
 
-// Build a labelled LCD row in 14 chars
+// Build a labelled LCD row in 14 chars: e.g. "IN:HELLO" or "OUT:.--"
 void lcdPrintLabeled(int row, const char *label, const char *content) {
   char line[lcdCols + 1];
   for (int i = 0; i < lcdCols; i++) line[i] = ' ';
@@ -174,6 +198,20 @@ void lcdPrintOut(const char *content) {
   lcdPrintLabeled(1, "OUT:", content);
 }
 
+unsigned long readDotDurationMs() {
+  int raw = analogRead(pinSpeedPot);                          // 0..1023
+  return (unsigned long)map(raw, 0, 1023, dotMinMs, dotMaxMs);
+}
+
+unsigned long readDashDurationMs() {
+  return readDotDurationMs() * 3UL;
+}
+
+// --- Helper functions ---
+
+// Check if a button was just pressed (handles debounce so we only see one press per push)
+// pin = which Arduino pin to read
+// lastRaw, edgeTime, held = the tracking variables for that button
 bool pressed(int pin, bool &lastRaw, unsigned long &edgeTime, bool &held) {
   bool raw = digitalRead(pin);              // Read the button pin (LOW = pressed, HIGH = released)
   if (raw != lastRaw) {                     // If the reading changed since last time
@@ -190,32 +228,34 @@ bool pressed(int pin, bool &lastRaw, unsigned long &edgeTime, bool &held) {
   return false;                             // No new press detected
 }
 
-// Play dot feedback: green LED + short beep 
+// Play dot feedback: green LED + short beep (same pitch as dash, shorter duration = real Morse feel).
+// NOTE: Uses delay(), so this is blocking while active.
 void signalDot(unsigned long durationMs) {
   digitalWrite(pinLedGreen, HIGH);    // Turn green LED on
-  tone(pinBuzzer, morseBeepHz);       // Short beep 
+  tone(pinBuzzer, morseBeepHz);       // Short beep – same pitch as dash, duration makes it a dot
   delay(durationMs);                  // Hold for requested duration
   noTone(pinBuzzer);                  // Stop buzzer
   digitalWrite(pinLedGreen, LOW);     // Turn green LED off
 }
 
-// Play dash feedback: red LED + long beep 
+// Play dash feedback: red LED + long beep (same pitch as dot, 3× longer duration = real Morse feel).
+// NOTE: Uses delay(), so this is blocking while active.
 void signalDash(unsigned long durationMs) {
   digitalWrite(pinLedRed, HIGH);      // Turn red LED on
-  tone(pinBuzzer, morseBeepHz);       // Long beep 
+  tone(pinBuzzer, morseBeepHz);       // Long beep – same pitch as dot, duration makes it a dash
   delay(durationMs);                  // Hold for requested duration
   noTone(pinBuzzer);                  // Stop buzzer
   digitalWrite(pinLedRed, LOW);       // Turn red LED off
 }
 
-
+// Play dot tone only (no LED), used for AI-response decode-first playback mode
 void playDotTone(unsigned long durationMs) {
   tone(pinBuzzer, dotToneHz);       // Start higher-pitch dot tone
   delay(durationMs);                   // Hold for requested duration
   noTone(pinBuzzer);                  // Stop buzzer
 }
 
-
+// Play dash tone only (no LED), used for AI-response decode-first playback mode
 void playDashTone(unsigned long durationMs) {
   tone(pinBuzzer, dashToneHz);      // Start lower-pitch dash tone
   delay(durationMs);                   // Hold for requested duration
@@ -224,15 +264,15 @@ void playDashTone(unsigned long durationMs) {
 
 // Play green feedback for dot entry
 void playGreenFeedback() {
-  signalDot(inputDotMs);            
+  signalDot(readDotDurationMs());   // Dot-style light+tone feedback (pot-adjustable)
 }
 
 // Play red feedback for dash entry and decode errors
 void playRedFeedback() {
-  signalDash(inputDashMs);          
+  signalDash(readDashDurationMs()); // Dash-style light+tone feedback (pot-adjustable)
 }
 
-// Play yellow feedback for decoded-letter success
+// Play yellow feedback for decoded-letter success (distinct LED + distinct tone)
 void playLetterFeedback() {
   digitalWrite(pinLedYellow, HIGH);    // Turn yellow LED on
   tone(pinBuzzer, letterToneHz);       // Distinct letter-decoded tone
@@ -248,7 +288,7 @@ void playYellowFeedback() {
   digitalWrite(pinLedYellow, LOW);  // Turn yellow LED off
 }
 
-// Print text on one row of the LCD
+// Print text on one row of the LCD, padding with spaces to fill the whole row
 void lcdPrint(int row, const char *s) {
   lcd.setCursor(0, row);          // Move cursor to the start of the row
   int n = strlen(s);              // Find out how long the text is
@@ -265,10 +305,15 @@ char decodeMorse(const char *pattern) {
       return morse[i].ch;                            // Return the letter
     }
   }
-  return '\0';                                       // Pattern not found 
+  return '\0';                                       // Pattern not found - return empty
 }
 
-
+// Play a text string as Morse code flashes on the LEDs.
+// NOTE: This function uses blocking delays - the Arduino cannot respond to button presses or
+// BLE events while it runs. For short messages this is a few seconds; for long AI responses
+// it can be 30+ seconds. This is an intentional simplification; the device appears unresponsive
+// during playback, which is acceptable because the user's job is to listen and decode.
+// Green LED = dot (short flash), Red LED = dash (long flash) unless toneOnly=true
 void playMorse(const char *text, bool toneOnly) {
   if (toneOnly) lcdPrintIn("");                       // Keep AI decode-first playback text hidden
   else lcdPrintIn("Listen!");                         // Show playback prompt on IN row
@@ -287,49 +332,49 @@ void playMorse(const char *text, bool toneOnly) {
             else signalDot(dotMs);                   // Dot light+tone
           } else {                                    // Otherwise the symbol is a dash
             if (toneOnly) playDashTone(dashMs);      // Dash tone only
-            else signalDash(dashMs);                 
+            else signalDash(dashMs);                 // Dash light+tone
           }
         }
         delay(charGap);                              // Wait between letters
-        break;                                        // Stop searching 
+        break;                                        // Stop searching - we already found the letter
       }
     }
-  
+    // If the character wasn't found in the Morse table, it is simply skipped
   }
-  lcdPrintIn("");                                     
+  lcdPrintIn("");                                     // Clear the "Listen!" message when playback ends
 }
 
 // Decode the current Morse pattern into a letter and add it to the word
 void finalizeCharacter() {
-  if (morseLen == 0) return;                                        
+  if (morseLen == 0) return;                                        // Nothing to decode, do nothing
   char ch = decodeMorse(morsePattern);                              // Look up the pattern in the table
-  if (ch) {                                                         
-    Serial.print(F("Decoded: ")); Serial.print(morsePattern);      
+  if (ch) {                                                         // If a valid letter was found
+    Serial.print(F("Decoded: ")); Serial.print(morsePattern);       // Print to Serial Monitor
     Serial.print(F(" = ")); Serial.println(ch);                     // Print the letter
     if (ch == '/') ch = ' ';                                        // Treat "-..-." as an actual word space
-    char s[2] = {ch, '\0'};                                         
+    char s[2] = {ch, '\0'};                                         // Make a 1-character string
     recognChar.writeValue((uint8_t *)s, 1);                         // Send the letter over BLE
     if (wordLen < maxWord) {                                       // If the word isn't too long yet
       wordBuffer[wordLen++] = ch;                                   // Add the letter to the word
-      wordBuffer[wordLen]   = '\0';                                 
-     
+      wordBuffer[wordLen]   = '\0';                                 // Add the end-of-string marker
+      wordChar.writeValue((uint8_t *)wordBuffer, (unsigned int)wordLen);  // Send updated word over BLE
     }
     playLetterFeedback();                                            // Play distinct decoded-letter feedback
   } else {                                                          // Pattern not recognised
-    Serial.print(F("Unknown pattern: ")); Serial.println(morsePattern);  
-    statusChar.writeValue((uint8_t *)"UNKNOWN", 7);                 
-    lcdPrintOut("? Unknown");                                       
+    Serial.print(F("Unknown pattern: ")); Serial.println(morsePattern);  // Print the bad pattern
+    statusChar.writeValue((uint8_t *)"UNKNOWN", 7);                 // Tell the Pi it was unknown
+    lcdPrintOut("? Unknown");                                       // Show send-side error on OUT row
     delay(600);                                                     // Pause so user can see the message
     playRedFeedback();                                              // Play RED feedback to show error
   }
-  morsePattern[0] = '\0';                                           // Clear the pattern 
+  morsePattern[0] = '\0';                                           // Clear the pattern (start fresh)
   morseLen = 0;                                                     // Reset pattern length to zero
   lastInputTime = 0;                                                // Reset the inactivity timer
   patternChar.writeValue((uint8_t *)"", 0);                         // Tell Pi the pattern is cleared
-  updateLCD();                                                      
+  updateLCD();                                                      // Redraw the LCD (shows word and any AI reply)
 }
 
-// Erase the current pattern and word 
+// Erase the current pattern and word - start completely fresh
 void eraseAll() {
   morsePattern[0] = '\0'; morseLen = 0;                             // Clear the pattern
   wordBuffer[0]   = '\0'; wordLen  = 0;                             // Clear the word
@@ -353,7 +398,7 @@ void sendWord() {
     Serial.println(F("Nothing to send"));                          // Say so in Serial Monitor
     return;                                                         // Exit the function early
   }
-  Serial.print(F("Sending: ")); Serial.println(wordBuffer);        
+  Serial.print(F("Sending: ")); Serial.println(wordBuffer);        // Print the word to Serial Monitor
   statusChar.writeValue((uint8_t *)"SENDING", 7);                   // Tell Pi we are sending
   lcdPrintIn("Await Reply..");                                      // Show receive status on IN row
   lcdPrintOut("Sending...");                                        // Show send status on OUT row
@@ -376,7 +421,7 @@ void updateLCD() {
     } else {                                                        // Reply is long - show current scroll position
       char slice[lcdCols + 1];                                     // Temporary buffer for the visible part
       strncpy(slice, aiResponse + aiScrollOffset, lcdCols);        // Copy the visible section
-      slice[lcdCols] = '\0';                                       
+      slice[lcdCols] = '\0';                                       // Add end-of-string marker
       lcdPrintIn(slice);                                            // Show the slice on the IN row
     }
   } else if (aiResponsePendingReveal) {
@@ -408,15 +453,17 @@ void updateLCD() {
 // setup() runs once when the Arduino is first powered on
 void setup() {
   Serial.begin(9600);                                   // Start the Serial Monitor at 9600 baud
-  while (!Serial && millis() < 3000) {}                 
+  while (!Serial && millis() < 3000) {}                 // Wait up to 3 seconds for Serial to be ready
   Serial.println(F("Morse Encoder starting"));          // Print startup message to Serial Monitor
 
-  
-  
-  pinMode(pinKeyer,     INPUT_PULLUP);  // dot paddle input pin
-  pinMode(pinKeyerDah, INPUT_PULLUP);  // dash paddle input pin
+  // Set the input pins as inputs with built-in pull-up resistors
+  // (INPUT_PULLUP means the pin reads HIGH normally and LOW when the button is pressed)
+  pinMode(pinKeyer,     INPUT_PULLUP);  // DIT (dot) paddle input pin
+  pinMode(pinKeyerDah, INPUT_PULLUP);  // DAH (dash) paddle input pin
   pinMode(pinErase,     INPUT_PULLUP);  // ERASE button pin
   pinMode(pinSend,      INPUT_PULLUP);  // SEND button pin
+  pinMode(pinSpeedPot,  INPUT_PULLDOWN); // Keep A6 stable when no speed pot is connected
+
   // Set the LED pins as outputs so we can turn them on and off
   pinMode(pinLedGreen,  OUTPUT);   // Green LED pin
   pinMode(pinLedRed,    OUTPUT);   // Red LED pin
@@ -458,7 +505,7 @@ void setup() {
   wordChar   .writeValue((uint8_t *)"", 0);             // Word starts empty
   statusChar .writeValue((uint8_t *)"READY", 5);        // Status is READY
 
-  BLE.advertise();                                      // Start broadcasting so Raspberry Pi can find it
+  BLE.advertise();                                      // Start broadcasting so other devices can find us
   Serial.println(F("BLE advertising as MorseEncoder")); // Confirm in Serial Monitor
 
   // Show ready message and flash all three LEDs in sequence to show they work
@@ -477,20 +524,20 @@ void loop() {
   BLEDevice central = BLE.central();                    // Check for a connected device
   if (central && !bleConnected) {                       // A device just connected
     bleConnected = true;                                // Remember we are connected
-    Serial.print(F("BLE connected: "));                
+    Serial.print(F("BLE connected: "));                // Print device address to Serial Monitor
     Serial.println(central.address());
     statusChar.writeValue((uint8_t *)"CONNECTED", 9);  // Tell Pi we are connected
     updateLCD();                                        // Update the LCD screen
   } else if (!central && bleConnected) {                // Device just disconnected
     bleConnected = false;                               // Remember we are disconnected
-    Serial.println(F("BLE disconnected"));             
+    Serial.println(F("BLE disconnected"));             // Print to Serial Monitor
     statusChar.writeValue((uint8_t *)"DISCONNECTED", 12); // Tell Pi we disconnected
     updateLCD();                                        // Update the LCD screen
   }
 
   // Check DIT (dot) paddle — pressing the dit paddle always records a DOT
   bool keyerRaw = digitalRead(pinKeyer);               // LOW = pressed, HIGH = released
-  if (keyerRaw != keyerLastRaw) {                       
+  if (keyerRaw != keyerLastRaw) {                       // state changed, start debounce timer
     keyerEdgeTime = millis();
     keyerLastRaw = keyerRaw;
   }
@@ -512,9 +559,9 @@ void loop() {
     }
   }
 
-  
+  // Check DAH (dash) paddle — pressing the dah paddle always records a DASH
   bool dahRaw = digitalRead(pinKeyerDah);             // LOW = pressed, HIGH = released
-  if (dahRaw != dahLastRaw) {                           
+  if (dahRaw != dahLastRaw) {                           // state changed, start debounce timer
     dahEdgeTime = millis();
     dahLastRaw = dahRaw;
   }
@@ -561,7 +608,7 @@ void loop() {
     playYellowFeedback();                               // Play YELLOW feedback to confirm SEND
   }
 
-  
+  // Auto-decode: if the user has entered a pattern and stopped for 800ms, decode it automatically
   if (morseLen > 0 && inputOccurred && millis() - lastInputTime >= charTimeoutMs) {
     finalizeCharacter();                                // Decode the pattern into a letter
   }
@@ -569,7 +616,7 @@ void loop() {
   // Scroll long outgoing words on the bottom row of the LCD
   if (wordLen > lcdCols && millis() - lastScrollTime >= lcdScrollMs) {
     lastScrollTime = millis();                          // Record the scroll time
-    if (++scrollOffset > wordLen - lcdCols) scrollOffset = 0;  // Advance scroll
+    if (++scrollOffset > wordLen - lcdCols) scrollOffset = 0;  // Advance scroll, wrap around after showing all characters
     char slice[lcdCols + 1];                           // Temporary buffer for the visible portion
     strncpy(slice, wordBuffer + scrollOffset, lcdCols); // Copy the visible section of the word
     slice[lcdCols] = '\0';                             // Add end-of-string marker
@@ -579,12 +626,12 @@ void loop() {
   // Scroll the AI reply on the top row of the LCD
   if (showingAiResponse && aiResponseLen > lcdCols &&
       millis() - lastAiScrollTime >= lcdScrollMs) {
-    lastAiScrollTime = millis();                        
-    if (++aiScrollOffset > aiResponseLen - lcdCols) aiScrollOffset = 0;  
-    char slice[lcdCols + 1];                           
-    strncpy(slice, aiResponse + aiScrollOffset, lcdCols);  
-    slice[lcdCols] = '\0';                             
-    lcdPrintIn(slice);                                   
+    lastAiScrollTime = millis();                        // Record the scroll time
+    if (++aiScrollOffset > aiResponseLen - lcdCols) aiScrollOffset = 0;  // Advance scroll, wrap around after showing all characters
+    char slice[lcdCols + 1];                           // Temporary buffer for the visible portion
+    strncpy(slice, aiResponse + aiScrollOffset, lcdCols);  // Copy the visible section of the reply
+    slice[lcdCols] = '\0';                             // Add end-of-string marker
+    lcdPrintIn(slice);                                   // Show the scrolled portion on the IN row
   }
 
   // Check if the Raspberry Pi has sent us an AI reply over Bluetooth

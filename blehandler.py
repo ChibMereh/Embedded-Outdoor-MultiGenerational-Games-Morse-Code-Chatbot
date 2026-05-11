@@ -186,11 +186,6 @@ class BLECentralHandler:
             await client.start_notify(WORDCHARUUID, notificationhandler)   # subscribe: call handler whenever a word arrives
             logger.info("Subscribed to word notifications")     # log that subscription is active
 
-            # ── Send greeting on connect ──────────────────────
-            greeting = "Hello Chib Mereh".encode("utf-8")
-            await client.write_gatt_char(RESPCHARUUID, greeting, response=False)
-            logger.info("Sent greeting to Arduino")
-
             # ── Wait until stop is requested ─────────────────
             await self.stopevent.wait()       # block here until stop() sets the event
 
