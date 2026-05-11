@@ -4,6 +4,7 @@ Arduino Nano BLE communication with Anthropic Claude integration
 """
 
 import os           # provides os.environ for reading environment variables
+import sys          # provides stdout/stderr so we can make console output encoding-safe
 import time         # provides time.time() for timestamps and time.sleep() for waiting
 import logging      # provides the logging framework for recording diagnostic messages
 import threading    # provides threading.Thread and threading.Lock for background timer threads
@@ -28,6 +29,15 @@ from config import (    # import all settings from config.py
 from morsedecoder import MorseDecoder          # class that converts dots/dashes to letters and words
 from inputhandler import MorseInputProcessor, createinputhandler, BluetoothInputHandler  # input classes
 from wordvalidator import WordValidator        # class that checks whether a decoded word is in the dictionary
+
+# Make console output resilient on terminals using non-UTF-8 encodings (for example latin-1)
+for stream in (sys.stdout, sys.stderr):
+    reconfigure = getattr(stream, "reconfigure", None)
+    if reconfigure:
+        try:
+            reconfigure(errors="replace")
+        except Exception:
+            pass
 
 # Configure logging – only set up file+console logging if ENABLELOGGING is True
 if ENABLELOGGING:
