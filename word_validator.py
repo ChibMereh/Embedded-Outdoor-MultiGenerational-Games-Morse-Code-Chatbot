@@ -23,8 +23,12 @@ class WordValidator:
                 self.dictionary = set(word.strip().upper() for word in f)   # read each line, strip whitespace, uppercase, store in set
             logger.info(f"Loaded {len(self.dictionary)} words from dictionary")  # log how many words were loaded
         except FileNotFoundError:
-            logger.warning(f"Dictionary file not found: {self.dictionary_file}")  # log that the file is missing
-            logger.warning("Using fallback dictionary")                            # warn that we are using built-in words
+            if self.dictionary_file == DICTIONARY_FILE:
+                logger.info(f"Default dictionary file not found: {self.dictionary_file}")  # default setup: informational only
+                logger.info("Using built-in fallback dictionary")                           # avoid noisy warnings on default installs
+            else:
+                logger.warning(f"Dictionary file not found: {self.dictionary_file}")  # custom path likely misconfigured: keep warning
+                logger.warning("Using fallback dictionary")                            # warn that we are using built-in words
             self.dictionary = self._get_fallback_dictionary()                 # use the hard-coded word list instead
     
     def _get_fallback_dictionary(self):
