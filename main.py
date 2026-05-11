@@ -56,7 +56,11 @@ logger = logging.getLogger(__name__)    # create a logger named after this modul
 # Anthropic client setup – try to import and initialise the Anthropic library
 try:
     from anthropic import Anthropic                                     # import the Anthropic Python client
-    apikey = ANTHROPICAPIKEY   # use key from config, or fall back to environment variable
+    apikey = (
+        ANTHROPICAPIKEY
+        or os.environ.get("ANTHROPICAPIKEY")
+        or os.environ.get("ANTHROPIC_API_KEY")
+    )   # use key from config, or fall back to common environment variable names
     anthropicclient = Anthropic(api_key=apikey) if apikey else None      # create client only if a key is available
     if anthropicclient:
         logger.info("Anthropic client initialized")                     # log success
@@ -203,10 +207,13 @@ class MorseCodeChatbot:
 
         def timer(generation):
             time.sleep(MESSAGETIMEOUTS)           # wait for the configured silence period
+            shouldfire = False
             with self.timeoutlock:
                 if generation == self.timeoutgeneration:  # only fire if we are still the newest timer
                     logger.info("Message timeout – treating accumulated words as full message")
-                    self.onmessageend()           # send the accumulated words to Claude
+                    shouldfire = True
+            if shouldfire:
+                self.onmessageend()           # send the accumulated words to Claude
 
         t = threading.Thread(target=timer, args=(gen,), daemon=True,
                              name="MsgTimeoutThread")   # create a background daemon thread

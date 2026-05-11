@@ -39,7 +39,7 @@ BLESCANTIMEOUT = 30.0     # seconds to wait while scanning before reporting that
 # as a complete message and sending them to the AI.  The user can also
 # trigger a send immediately by pressing the SEND button on the Arduino, which
 # transmits a special "SEND" sentinel word.
-MESSAGETIMEOUTS = 8.0     # seconds of silence after the last word before the message is sent to Claude
+MESSAGETIMEOUTS = 15.0     # seconds of silence after the last word before the message is sent to Claude
 
 # Output Configuration
 ENABLELOGGING = True           # True = write log messages to LOGFILE (and console); False = no logging
