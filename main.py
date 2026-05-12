@@ -23,6 +23,8 @@ from config import (    # import all settings from config.py
     USEBLE,                 # True = use BLE (Arduino Nano 33 BLE), False = classic Bluetooth serial
     BLEDEVICENAME,         # the Bluetooth name the Arduino advertises (e.g. "MorseEncoder")
     BLESCANTIMEOUT,        # how many seconds to scan for the Arduino before giving up
+    BLERECONNECTDELAYS,    # delay between BLE reconnect attempts
+    BLEWRITEWITHRESPONSE,  # whether BLE response writes should request acknowledgement
     MESSAGETIMEOUTS,       # seconds of silence before treating accumulated words as a full message
     SCENARIOPROMPT,         # the system prompt that gives the AI its personality / game role
 )
@@ -346,6 +348,8 @@ class MorseCodeChatbot:
             self.inputhandler = BLECentralHandler(
                 devicename=BLEDEVICENAME,                        # the name the Arduino is advertising
                 scantimeout=BLESCANTIMEOUT,                      # how long to scan before giving up
+                reconnectdelay=BLERECONNECTDELAYS,               # wait before retrying after disconnect/scan failure
+                writewithresponse=BLEWRITEWITHRESPONSE,          # stronger BLE write delivery guarantees
                 wordcallback=self.onblewordreceived,            # called each time a word arrives over BLE
             )
             logger.info("BLE central input handler created")        # log that setup is done
