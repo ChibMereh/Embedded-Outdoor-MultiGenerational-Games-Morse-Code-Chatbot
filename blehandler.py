@@ -158,7 +158,7 @@ class BLECentralHandler:
             )
             return
 
-        while self.running and not self.stopevent.is_set():
+        while not self.stopevent.is_set():
             # ── Scan for the peripheral ───────────────────────
             logger.info("Scanning for BLE peripheral '%s' (timeout %.0fs)…",
                         self.devicename, self.scantimeout)    # log that scanning is starting
@@ -212,7 +212,6 @@ class BLECentralHandler:
                     )
                     for task in pending:
                         task.cancel()
-                    for task in pending:
                         try:
                             await task
                         except asyncio.CancelledError:
