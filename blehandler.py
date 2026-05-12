@@ -176,20 +176,20 @@ class BLECentralHandler:
             logger.info("Found peripheral: %s  [%s]", device.name, device.address)  # log the device name and MAC address
             disconnectevent = asyncio.Event()  # set when bleak reports a disconnect
 
-            def disconnectedhandler(_client):
+            def disconnected_handler(_client):
                 logger.warning("BLE disconnected unexpectedly; preparing reconnect")
                 disconnectevent.set()
 
             try:
                 # ── Connect ──────────────────────────────────
                 async with BleakClient(
-                    device, disconnected_callback=disconnectedhandler
+                    device, disconnected_callback=disconnected_handler
                 ) as client:   # open a BLE connection (automatically closes when block exits)
                     self.client = client         # store client so sendresponse() can use it
                     logger.info("BLE connected to %s", device.address)  # log that the connection succeeded
 
                     # ── Subscribe to word notifications ───────
-                    def notificationhandler(sender, data: bytearray):
+                    def notification_handler(sender, data: bytearray):
                         word = data.decode("utf-8", errors="replace").strip()  # decode received bytes to string
                         if not word:
                             return                  # ignore empty notifications
@@ -200,7 +200,7 @@ class BLECentralHandler:
                             except Exception as exc:
                                 logger.error("wordcallback error: %s", exc)  # log but don't crash on callback errors
 
-                    await client.start_notify(WORDCHARUUID, notificationhandler)   # subscribe to word notifications
+                    await client.start_notify(WORDCHARUUID, notification_handler)   # subscribe to word notifications
                     logger.info("Subscribed to word notifications")     # log that subscription is active
 
                     # ── Wait until stop or disconnect ─────────
