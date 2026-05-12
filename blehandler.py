@@ -212,7 +212,11 @@ class BLECentralHandler:
                     )
                     for task in pending:
                         task.cancel()
-                    await asyncio.gather(*pending, return_exceptions=True)
+                    for task in pending:
+                        try:
+                            await task
+                        except asyncio.CancelledError:
+                            pass
 
                     if self.stopevent.is_set():
                         logger.info("BLE stop requested")
