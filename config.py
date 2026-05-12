@@ -36,7 +36,7 @@ BLEDEVICENAME = "MorseEncoder"    # the Bluetooth name the Arduino broadcasts so
 BLESCANTIMEOUT = 30.0     # seconds to wait while scanning before reporting that the Arduino was not found
 
 # Delay before the next scan/connect attempt after a BLE failure or disconnect.
-BLERECONNECTDELAYS = 2.0   # seconds between automatic reconnect attempts for more stable long-running sessions
+BLERECONNECTDELAY = 2.0   # seconds between automatic reconnect attempts for more stable long-running sessions
 
 # Write response chunks with BLE acknowledgement for stronger delivery reliability.
 BLEWRITEWITHRESPONSE = True   # True = request GATT write response/ack from peripheral; False = fire-and-forget writes
