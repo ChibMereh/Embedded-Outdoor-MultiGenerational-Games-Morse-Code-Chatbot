@@ -147,7 +147,15 @@ class BLECentralHandler:
             logger.info("BLE event loop closed")    # log that the loop has shut down
 
     async def mainloop(self):
-        """Top-level coroutine: keep scanning/connecting and auto-reconnect on failures."""
+        """
+        Top-level coroutine with resilient BLE lifecycle management.
+
+        Behavior:
+        - Repeatedly scans for the configured peripheral name.
+        - Connects and subscribes to word notifications once found.
+        - Waits for either a stop request (stopevent) or an unexpected disconnect.
+        - Automatically retries scan/connect after reconnectdelay seconds.
+        """
         self.stopevent = asyncio.Event()  # create the event that will signal shutdown
 
         try:
@@ -168,8 +176,6 @@ class BLECentralHandler:
             if device is None:
                 logger.warning("Peripheral '%s' not found; retrying in %.1fs",
                                self.devicename, self.reconnectdelay)
-                if self.stopevent.is_set():
-                    break
                 await asyncio.sleep(self.reconnectdelay)
                 continue
 
