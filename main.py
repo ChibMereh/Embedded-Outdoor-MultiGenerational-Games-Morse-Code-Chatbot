@@ -316,17 +316,16 @@ class MorseCodeChatbot:
         if not compact:
             return ""
 
-        sentenceend = len(compact)
-        for marker in ".!?":
-            markerindex = compact.find(marker)
-            if markerindex != -1 and markerindex + 1 < sentenceend:
-                sentenceend = markerindex + 1
+        sentenceend = next(
+            (index + 1 for index, char in enumerate(compact) if char in ".!?"),
+            len(compact),
+        )
         compact = compact[:sentenceend].strip()
 
         if len(compact) > MAXLCDRESPONSECHARS:
             truncated = compact[:MAXLCDRESPONSECHARS].rstrip()
             if " " in truncated:
-                truncated = truncated.rsplit(" ", 1)[0]
+                truncated = truncated.rsplit(" ", 1)[0] or compact[:MAXLCDRESPONSECHARS].rstrip()
             compact = truncated.rstrip(" ,;:-") + "..."
 
         encoded = compact.encode("utf-8", errors="replace")
