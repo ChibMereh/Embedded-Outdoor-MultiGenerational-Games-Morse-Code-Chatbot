@@ -64,7 +64,7 @@ MAXWORDLENGTH = 20    # words longer than this many letters are rejected as inva
 # Anthropic Claude Configuration
 ANTHROPICAPIKEY = ""     # leave blank and set the ANTHROPICAPIKEY environment variable
 ANTHROPICMODEL = "claude-opus-4-7"   # Claude model to use
-ANTHROPICMAXTOKENS = 240                     # maximum length of the AI's reply in tokens
+ANTHROPICMAXTOKENS = 80                      # keep replies short enough for the BLE/LCD display path
 
 # ── Scenario Prompt ──────────────────────────────────────────────────────────
 # This is the Claude system message.  Change it to set the game scenario.
@@ -74,7 +74,7 @@ ANTHROPICMAXTOKENS = 240                     # maximum length of the AI's reply 
 #   "You are a quiz master for a trivia game. Ask one question at a time."
 SCENARIOPROMPT = (
     "You are a helpful assistant communicating via Morse code. "    # define the AI's role
-    "Keep your responses concise and clear (up to 4 short sentences), " # keep replies readable on the LCD
+    "Reply with one short, clear sentence and keep it brief, "      # keep replies readable on the LCD
     "as they will be displayed on a small LCD screen attached to an Arduino."  # explain why brevity matters
 )
 
