@@ -81,6 +81,7 @@ const int lcdCols           = 14;   // LCD screen has 14 columns
 const int lcdRows           = 2;    // LCD screen has 2 rows
 const int maxResponseBytes = 160;  // Maximum length of AI reply (must match ble_handler.py)
 const char greetingPrefix[] = "__GREETING__:"; // Prefix for display-only connection greeting from Pi
+const int greetingPrefixLen = sizeof(greetingPrefix) - 1; // Compile-time greeting prefix length
 
 // --- Morse code table ---
 // Each entry stores one letter and its Morse code pattern
@@ -628,11 +629,10 @@ void loop() {
     aiResponsePendingReveal = false;                               // No manual reveal required
     Serial.print(F("AI response received: ")); Serial.println(aiResponse);  // Print to Serial Monitor
     playYellowFeedback();                                          // Play YELLOW feedback to show reply arrived
-    const int prefixLen = (int)(sizeof(greetingPrefix) - 1);
-    if (aiResponseLen >= prefixLen &&
-        strncmp(aiResponse, greetingPrefix, (size_t)prefixLen) == 0) {
-      int greetingLen = aiResponseLen - prefixLen;
-      memmove(aiResponse, aiResponse + prefixLen, (size_t)greetingLen + 1);
+    if (aiResponseLen >= greetingPrefixLen &&
+        strncmp(aiResponse, greetingPrefix, (size_t)greetingPrefixLen) == 0) {
+      int greetingLen = aiResponseLen - greetingPrefixLen;
+      memmove(aiResponse, aiResponse + greetingPrefixLen, (size_t)greetingLen + 1);
       aiResponse[greetingLen] = '\0';
       aiResponseLen = greetingLen;
       showingAiResponse = true;
