@@ -50,12 +50,14 @@ class BLECentralHandler:
     """
 
     def __init__(self, devicename="MorseEncoder", scantimeout=30.0,
-                 reconnectdelay=2.0, writewithresponse=True, wordcallback=None):
+                 reconnectdelay=2.0, writewithresponse=True, wordcallback=None,
+                 greetingtext=None):
         self.devicename   = devicename    # the Bluetooth name we look for during scanning
         self.scantimeout  = scantimeout   # how many seconds to scan before giving up
         self.reconnectdelay = reconnectdelay   # delay between retry attempts after scan/connect failures
         self.writewithresponse = writewithresponse  # whether response writes require BLE acknowledgement
         self.wordcallback = wordcallback  # function to call each time a word arrives from the Arduino
+        self.greetingtext = greetingtext  # text written to responseChar immediately after BLE connects
 
         self.client       = None           # BleakClient instance (set once connected)
         self.loop         = None           # asyncio event loop running in the background thread
@@ -208,6 +210,19 @@ class BLECentralHandler:
 
                     await client.start_notify(WORDCHARUUID, notification_handler)   # subscribe to word notifications
                     logger.info("Subscribed to word notifications")     # log that subscription is active
+
+                    # Send greeting text to the Arduino LCD if one is configured
+                    if self.greetingtext:
+                        try:
+                            encoded = self.greetingtext.encode("utf-8", errors="replace")
+                            await client.write_gatt_char(
+                                RESPCHARUUID,
+                                encoded[:MAXRESPONSEBYTES],
+                                response=self.writewithresponse,
+                            )  # write the greeting to responseChar so the Arduino LCD shows it
+                            logger.info("Sent greeting: %s", self.greetingtext[:60])   # log the greeting
+                        except Exception as exc:
+                            logger.warning("Failed to send greeting: %s", exc)  # log but do not abort
 
                     # ── Wait until stop or disconnect ─────────
                     stopwait = asyncio.create_task(self.stopevent.wait())
