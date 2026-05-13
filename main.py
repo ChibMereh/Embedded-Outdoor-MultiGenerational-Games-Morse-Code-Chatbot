@@ -316,9 +316,12 @@ class MorseCodeChatbot:
         if not compact:
             return ""
 
-        firstsentence = re.split(r"(?<=[.!?])\s+", compact, maxsplit=1)[0].strip()
-        if firstsentence:
-            compact = firstsentence
+        sentenceend = len(compact)
+        for marker in ".!?":
+            markerindex = compact.find(marker)
+            if markerindex != -1 and markerindex + 1 < sentenceend:
+                sentenceend = markerindex + 1
+        compact = compact[:sentenceend].strip()
 
         if len(compact) > MAXLCDRESPONSECHARS:
             truncated = compact[:MAXLCDRESPONSECHARS].rstrip()
@@ -327,12 +330,14 @@ class MorseCodeChatbot:
             compact = truncated.rstrip(" ,;:-") + "..."
 
         encoded = compact.encode("utf-8", errors="replace")
-        while len(encoded) > MAXBLERESPONSEBYTES and compact:
-            if compact.endswith("..."):
-                compact = compact[:-4].rstrip() + "..."
-            else:
-                compact = compact[:-1].rstrip()
-            encoded = compact.encode("utf-8", errors="replace")
+        if len(encoded) > MAXBLERESPONSEBYTES:
+            compact = (
+                encoded[: MAXBLERESPONSEBYTES - 3]
+                .decode("utf-8", errors="ignore")
+                .rstrip(" ,;:-.")
+            )
+            if compact:
+                compact += "..."
         return compact
     
     # ── Response delivery ────────────────────────────────────────────────
