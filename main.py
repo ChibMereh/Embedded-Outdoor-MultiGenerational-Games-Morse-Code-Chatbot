@@ -328,9 +328,10 @@ class MorseCodeChatbot:
 
         encoded = compact.encode("utf-8", errors="replace")
         while len(encoded) > MAXBLERESPONSEBYTES and compact:
-            compact = compact[:-1].rstrip()
-            if compact.endswith(".."):
-                compact = compact[:-2].rstrip() + "..."
+            if compact.endswith("..."):
+                compact = compact[:-4].rstrip() + "..."
+            else:
+                compact = compact[:-1].rstrip()
             encoded = compact.encode("utf-8", errors="replace")
         return compact
     
