@@ -205,11 +205,20 @@ bool pressed(int pin, bool &lastRaw, unsigned long &edgeTime, bool &held) {
   return false;                             // No new press detected
 }
 
+// BLE-friendly delay helper: keeps ArduinoBLE serviced during waits
+void bleFriendlyDelay(unsigned long durationMs) {
+  unsigned long start = millis();
+  while (millis() - start < durationMs) {
+    BLE.poll();
+    delay(2);
+  }
+}
+
 // Play dot feedback: green LED + short beep 
 void signalDot(unsigned long durationMs) {
   digitalWrite(pinLedGreen, HIGH);    // Turn green LED on
   tone(pinBuzzer, morseBeepHz);       // Short beep 
-  delay(durationMs);                  // Hold for requested duration
+  bleFriendlyDelay(durationMs);       // Hold for requested duration
   noTone(pinBuzzer);                  // Stop buzzer
   digitalWrite(pinLedGreen, LOW);     // Turn green LED off
 }
@@ -218,7 +227,7 @@ void signalDot(unsigned long durationMs) {
 void signalDash(unsigned long durationMs) {
   digitalWrite(pinLedRed, HIGH);      // Turn red LED on
   tone(pinBuzzer, morseBeepHz);       // Long beep 
-  delay(durationMs);                  // Hold for requested duration
+  bleFriendlyDelay(durationMs);       // Hold for requested duration
   noTone(pinBuzzer);                  // Stop buzzer
   digitalWrite(pinLedRed, LOW);       // Turn red LED off
 }
@@ -226,14 +235,14 @@ void signalDash(unsigned long durationMs) {
 
 void playDotTone(unsigned long durationMs) {
   tone(pinBuzzer, dotToneHz);       // Start higher-pitch dot tone
-  delay(durationMs);                   // Hold for requested duration
+  bleFriendlyDelay(durationMs);        // Hold for requested duration
   noTone(pinBuzzer);                  // Stop buzzer
 }
 
 
 void playDashTone(unsigned long durationMs) {
   tone(pinBuzzer, dashToneHz);      // Start lower-pitch dash tone
-  delay(durationMs);                   // Hold for requested duration
+  bleFriendlyDelay(durationMs);        // Hold for requested duration
   noTone(pinBuzzer);                  // Stop buzzer
 }
 
@@ -251,7 +260,7 @@ void playRedFeedback() {
 void playLetterFeedback() {
   digitalWrite(pinLedYellow, HIGH);    // Turn yellow LED on
   tone(pinBuzzer, letterToneHz);       // Distinct letter-decoded tone
-  delay(ledFlashMs);                   // Keep active briefly
+  bleFriendlyDelay(ledFlashMs);        // Keep active briefly
   noTone(pinBuzzer);                   // Stop buzzer
   digitalWrite(pinLedYellow, LOW);     // Turn yellow LED off
 }
@@ -259,7 +268,7 @@ void playLetterFeedback() {
 // Play yellow feedback for SEND/ERASE and AI-reply arrival
 void playYellowFeedback() {
   digitalWrite(pinLedYellow, HIGH); // Turn yellow LED on
-  delay(ledFlashMs);                // Wait 200ms
+  bleFriendlyDelay(ledFlashMs);     // Wait 200ms
   digitalWrite(pinLedYellow, LOW);  // Turn yellow LED off
 }
 
@@ -290,13 +299,13 @@ void playMorse(const char *text, bool toneOnly) {
   for (int i = 0; text[i] != '\0'; i++) {             // Go through each character in the text
     char c = (char)toupper((unsigned char)text[i]);   // Convert to uppercase
     if (c == ' ' || c == '\n' || c == '\r') {         // If it's a space or line break
-      delay(wordGap);                                // Wait for the word gap
+      bleFriendlyDelay(wordGap);                     // Wait for the word gap
       continue;                                       // Move on to the next character
     }
     for (int j = 0; j < morseSize; j++) {            // Search the Morse table for this letter
       if (morse[j].ch == c) {                         // Found the letter in the table
         for (int k = 0; morse[j].pat[k] != '\0'; k++) {  // Go through each dot/dash in the pattern
-          if (k > 0) delay(elemGap);                 // Wait between dots/dashes (not before first one)
+          if (k > 0) bleFriendlyDelay(elemGap);      // Wait between dots/dashes (not before first one)
           if (morse[j].pat[k] == '.') {               // If this symbol is a dot
             if (toneOnly) playDotTone(dotMs);        // Dot tone only
             else signalDot(dotMs);                   // Dot light+tone
@@ -305,7 +314,7 @@ void playMorse(const char *text, bool toneOnly) {
             else signalDash(dashMs);                 
           }
         }
-        delay(charGap);                              // Wait between letters
+        bleFriendlyDelay(charGap);                   // Wait between letters
         break;                                        // Stop searching 
       }
     }
@@ -334,7 +343,7 @@ void finalizeCharacter() {
     Serial.print(F("Unknown pattern: ")); Serial.println(morsePattern);  
     statusChar.writeValue((uint8_t *)"UNKNOWN", 7);                 
     lcdPrintOut("? Unknown");                                       
-    delay(600);                                                     // Pause so user can see the message
+    bleFriendlyDelay(600);                                          // Pause so user can see the message
     playRedFeedback();                                              // Play RED feedback to show error
   }
   morsePattern[0] = '\0';                                           // Clear the pattern 
@@ -373,11 +382,11 @@ void sendWord() {
   lcdPrintIn("Await Reply..");                                      // Show receive status on IN row
   lcdPrintOut("Sending...");                                        // Show send status on OUT row
   wordChar.writeValue((uint8_t *)wordBuffer, (unsigned int)wordLen); // Send the word over BLE
-  delay(200);                                                       // Short pause
+  bleFriendlyDelay(200);                                            // Short pause
   statusChar.writeValue((uint8_t *)"SENT", 4);                      // Tell Pi it was sent
   lcdPrintIn("Await Reply..");                                      // Keep receive status on IN row
   lcdPrintOut("Sent!");                                             // Update LCD OUT row
-  delay(1500);                                                      // Wait so the user can read it
+  bleFriendlyDelay(1500);                                           // Wait so the user can read it
   eraseAll();                                                       // Clear everything ready for next word
   statusChar.writeValue((uint8_t *)"READY", 5);                     // Tell Pi we are ready again
 }
@@ -484,12 +493,14 @@ void setup() {
   playGreenFeedback();                                 // Flash green (DOT colour) to test it
   playRedFeedback();                                   // Flash red (DASH colour) to test it
   playYellowFeedback();                                // Flash yellow (SEND/ERASE colour) to test it
-  delay(1500);                                         // Wait 1.5 seconds so user can read the LCD
+  bleFriendlyDelay(1500);                              // Wait 1.5 seconds so user can read the LCD
   updateLCD();                                         // Switch to normal display
 }
 
 // loop() runs over and over forever after setup() finishes
 void loop() {
+  BLE.poll();                                              // Service BLE stack every loop iteration
+
   // Check if a Bluetooth device has connected or disconnected
   BLEDevice central = BLE.central();                    // Check for a connected device
   if (central && !bleConnected) {                       // A device just connected
@@ -570,7 +581,7 @@ void loop() {
       updateLCD();                                      // Refresh LCD immediately
     } else if (wordLen == 0) {
       lcdPrintOut("Nothing to send");                     // Give explicit feedback for empty SEND
-      delay(800);                                       // Leave message visible briefly
+      bleFriendlyDelay(800);                            // Leave message visible briefly
       updateLCD();                                      // Restore normal LCD layout
     } else {
       sendWord();                                       // Send the queued word
