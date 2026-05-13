@@ -628,11 +628,11 @@ void loop() {
     aiResponsePendingReveal = false;                               // No manual reveal required
     Serial.print(F("AI response received: ")); Serial.println(aiResponse);  // Print to Serial Monitor
     playYellowFeedback();                                          // Play YELLOW feedback to show reply arrived
-    if (strncmp(aiResponse, greetingPrefix, strlen(greetingPrefix)) == 0) {
-      int prefixLen = (int)strlen(greetingPrefix);
+    const int prefixLen = (int)(sizeof(greetingPrefix) - 1);
+    if (strncmp(aiResponse, greetingPrefix, (size_t)prefixLen) == 0) {
       int greetingLen = aiResponseLen - prefixLen;
       if (greetingLen < 0) greetingLen = 0;
-      memmove(aiResponse, aiResponse + prefixLen, (size_t)greetingLen);
+      memmove(aiResponse, aiResponse + prefixLen, (size_t)greetingLen + 1);
       aiResponse[greetingLen] = '\0';
       aiResponseLen = greetingLen;
       showingAiResponse = true;
