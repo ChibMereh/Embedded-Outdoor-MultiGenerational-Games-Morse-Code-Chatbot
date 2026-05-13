@@ -632,7 +632,8 @@ void loop() {
     if (aiResponseLen >= greetingPrefixLen &&
         strncmp(aiResponse, greetingPrefix, (size_t)greetingPrefixLen) == 0) {
       int greetingLen = aiResponseLen - greetingPrefixLen;
-      memmove(aiResponse, aiResponse + greetingPrefixLen, (size_t)greetingLen + 1);
+      aiResponse[aiResponseLen] = '\0';
+      memmove(aiResponse, aiResponse + greetingPrefixLen, (size_t)greetingLen);
       aiResponse[greetingLen] = '\0';
       aiResponseLen = greetingLen;
     } else {
