@@ -334,13 +334,15 @@ class MorseCodeChatbot:
 
         encoded = compact.encode("utf-8", errors="replace")
         if len(encoded) > MAXBLERESPONSEBYTES:
-            compact = (
+            byteclipped = (
                 encoded[: MAXBLERESPONSEBYTES - ELLIPSIS_BYTES]
                 .decode("utf-8", errors="ignore")
                 .rstrip(" ,;:-.")
             )
-            if compact:
-                compact += ELLIPSIS
+            if byteclipped:
+                compact = byteclipped + ELLIPSIS
+            else:
+                compact = encoded[:MAXBLERESPONSEBYTES].decode("utf-8", errors="ignore").strip()
         return compact
     
     # ── Response delivery ────────────────────────────────────────────────

@@ -399,6 +399,7 @@ void sendWord() {
 
 // Update the LCD screen to show the current state
 void updateLCD() {
+  // We avoid lcd.clear() here to reduce visible flicker; lcdPrint() overwrites each row fully with padding.
   if (showingAiResponse && aiResponseLen > 0) {                     // If an AI reply should be shown
     if (aiResponseLen <= inContentCols) {                          // Reply fits on the visible IN area
       lcdPrintIn(aiResponse);                                       // Show the whole reply on IN row
