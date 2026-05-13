@@ -50,9 +50,11 @@ class BLECentralHandler:
     """
 
     def __init__(self, devicename="MorseEncoder", scantimeout=30.0,
-                 wordcallback=None):
+                 reconnectdelay=2.0, writewithresponse=True, wordcallback=None):
         self.devicename   = devicename    # the Bluetooth name we look for during scanning
         self.scantimeout  = scantimeout   # how many seconds to scan before giving up
+        self.reconnectdelay = reconnectdelay   # delay between retry attempts after scan/connect failures
+        self.writewithresponse = writewithresponse  # whether response writes require BLE acknowledgement
         self.wordcallback = wordcallback  # function to call each time a word arrives from the Arduino
 
         self.client       = None           # BleakClient instance (set once connected)
@@ -112,8 +114,11 @@ class BLECentralHandler:
             for i in range(0, len(encoded), MAXRESPONSEBYTES):        # split into chunks if too long
                 chunk = encoded[i : i + MAXRESPONSEBYTES]             # take the next chunk of bytes
                 try:
-                    await self.client.write_gatt_char(RESPCHARUUID, chunk,
-                                                       response=False)  # write the chunk to responseChar (no acknowledgement needed)
+                    await self.client.write_gatt_char(
+                        RESPCHARUUID,
+                        chunk,
+                        response=self.writewithresponse
+                    )  # write the chunk to responseChar, optionally with acknowledgement for reliability
                     logger.info("Sent BLE chunk (%d bytes): %s",
                                 len(chunk), chunk[:60])                 # log the chunk size and a preview
                     # Small delay between chunks so the Arduino can process each one before the next arrives
@@ -142,7 +147,15 @@ class BLECentralHandler:
             logger.info("BLE event loop closed")    # log that the loop has shut down
 
     async def mainloop(self):
-        """Top-level coroutine: scan → connect → subscribe → wait → disconnect."""
+        """
+        Top-level coroutine with resilient BLE lifecycle management.
+
+        Behavior:
+        - Repeatedly scans for the configured peripheral name.
+        - Connects and subscribes to word notifications once found.
+        - Waits for either a stop request (stopevent) or an unexpected disconnect.
+        - Automatically retries scan/connect after reconnectdelay seconds.
+        """
         self.stopevent = asyncio.Event()  # create the event that will signal shutdown
 
         try:
@@ -153,44 +166,80 @@ class BLECentralHandler:
             )
             return
 
-        # ── Scan for the peripheral ───────────────────────────
-        logger.info("Scanning for BLE peripheral '%s' (timeout %.0fs)…",
-                    self.devicename, self.scantimeout)    # log that scanning is starting
-        device = await BleakScanner.find_device_by_name(
-            self.devicename, timeout=self.scantimeout     # scan for up to scantimeout seconds
-        )
-        if device is None:
-            logger.error("Peripheral '%s' not found. Is the Arduino powered on "
-                         "and advertising?", self.devicename)  # log that the Arduino was not found
-            return                  # exit if the Arduino is not visible
+        while not self.stopevent.is_set():
+            # ── Scan for the peripheral ───────────────────────
+            logger.info("Scanning for BLE peripheral '%s' (timeout %.0fs)…",
+                        self.devicename, self.scantimeout)    # log that scanning is starting
+            device = await BleakScanner.find_device_by_name(
+                self.devicename, timeout=self.scantimeout     # scan for up to scantimeout seconds
+            )
+            if device is None:
+                logger.warning("Peripheral '%s' not found; retrying in %.1fs",
+                               self.devicename, self.reconnectdelay)
+                await asyncio.sleep(self.reconnectdelay)
+                continue
 
-        logger.info("Found peripheral: %s  [%s]", device.name, device.address)  # log the device name and MAC address
+            logger.info("Found peripheral: %s  [%s]", device.name, device.address)  # log the device name and MAC address
+            disconnectevent = asyncio.Event()  # set when bleak reports a disconnect
 
-        # ── Connect ──────────────────────────────────────────
-        async with BleakClient(device) as client:   # open a BLE connection (automatically closes when the block exits)
-            self.client = client                   # store the client so sendresponse() can use it
-            logger.info("BLE connected to %s", device.address)  # log that the connection succeeded
+            def disconnected_handler(_client):
+                logger.warning("BLE disconnected unexpectedly; preparing reconnect")
+                disconnectevent.set()
 
-            # ── Subscribe to word notifications ───────────────
-            def notificationhandler(sender, data: bytearray):
-                word = data.decode("utf-8", errors="replace").strip()  # decode the received bytes to a string and strip whitespace
-                if not word:
-                    return                      # ignore empty notifications
-                logger.info("BLE word notification: '%s'", word)   # log the received word
-                if self.wordcallback:
+            try:
+                # ── Connect ──────────────────────────────────
+                async with BleakClient(
+                    device, disconnected_callback=disconnected_handler
+                ) as client:   # open a BLE connection (automatically closes when block exits)
+                    self.client = client         # store client so sendresponse() can use it
+                    logger.info("BLE connected to %s", device.address)  # log that the connection succeeded
+
+                    # ── Subscribe to word notifications ───────
+                    def notification_handler(sender, data: bytearray):
+                        word = data.decode("utf-8", errors="replace").strip()  # decode received bytes to string
+                        if not word:
+                            return                  # ignore empty notifications
+                        logger.info("BLE word notification: '%s'", word)   # log the received word
+                        if self.wordcallback:
+                            try:
+                                self.wordcallback(word)    # call registered callback with decoded word
+                            except Exception as exc:
+                                logger.error("wordcallback error: %s", exc)  # log but don't crash on callback errors
+
+                    await client.start_notify(WORDCHARUUID, notification_handler)   # subscribe to word notifications
+                    logger.info("Subscribed to word notifications")     # log that subscription is active
+
+                    # ── Wait until stop or disconnect ─────────
+                    stopwait = asyncio.create_task(self.stopevent.wait())
+                    disconnectwait = asyncio.create_task(disconnectevent.wait())
+                    done, pending = await asyncio.wait(
+                        {stopwait, disconnectwait},
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
+                    for task in pending:
+                        task.cancel()
+                        try:
+                            await task
+                        except asyncio.CancelledError:
+                            pass
+
+                    if self.stopevent.is_set():
+                        logger.info("BLE stop requested")
+                    elif disconnectwait in done:
+                        logger.warning("BLE link dropped; reconnecting")
+
                     try:
-                        self.wordcallback(word)    # call the registered callback with the decoded word
+                        await client.stop_notify(WORDCHARUUID)        # unsubscribe before disconnecting
+                        logger.info("Unsubscribed from word notifications")
                     except Exception as exc:
-                        logger.error("wordcallback error: %s", exc)  # log but don't crash on callback errors
+                        logger.warning("BLE stop_notify warning: %s", exc)
 
-            await client.start_notify(WORDCHARUUID, notificationhandler)   # subscribe: call handler whenever a word arrives
-            logger.info("Subscribed to word notifications")     # log that subscription is active
+            except Exception as exc:
+                logger.error("BLE connect/session error: %s", exc)
+            finally:
+                self.client = None             # clear client reference so sendresponse() knows we are disconnected
+                logger.info("BLE disconnected")  # log that the BLE connection has been closed
 
-            # ── Wait until stop is requested ─────────────────
-            await self.stopevent.wait()       # block here until stop() sets the event
-
-            await client.stop_notify(WORDCHARUUID)        # unsubscribe from word notifications before disconnecting
-            logger.info("Unsubscribed from word notifications")     # log that we have unsubscribed
-
-        self.client = None             # clear the client reference now that we are disconnected
-        logger.info("BLE disconnected") # log that the BLE connection has been closed
+            if self.stopevent.is_set():
+                break
+            await asyncio.sleep(self.reconnectdelay)   # wait briefly before retrying to avoid tight reconnect loops

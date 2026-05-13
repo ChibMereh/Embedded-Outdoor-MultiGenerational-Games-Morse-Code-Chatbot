@@ -23,6 +23,8 @@ from config import (    # import all settings from config.py
     USEBLE,                 # True = use BLE (Arduino Nano 33 BLE), False = classic Bluetooth serial
     BLEDEVICENAME,         # the Bluetooth name the Arduino advertises (e.g. "MorseEncoder")
     BLESCANTIMEOUT,        # how many seconds to scan for the Arduino before giving up
+    BLERECONNECTDELAY,     # delay between BLE reconnect attempts
+    BLEWRITEWITHRESPONSE,  # whether BLE response writes should request acknowledgement
     MESSAGETIMEOUTS,       # seconds of silence before treating accumulated words as a full message
     SCENARIOPROMPT,         # the system prompt that gives the AI its personality / game role
 )
@@ -56,7 +58,11 @@ logger = logging.getLogger(__name__)    # create a logger named after this modul
 # Anthropic client setup – try to import and initialise the Anthropic library
 try:
     from anthropic import Anthropic                                     # import the Anthropic Python client
-    apikey = ANTHROPICAPIKEY   # use key from config, or fall back to environment variable
+    apikey = (
+        ANTHROPICAPIKEY
+        or os.environ.get("ANTHROPICAPIKEY")
+        or os.environ.get("ANTHROPIC_API_KEY")
+    )   # use key from config, or fall back to common environment variable names
     anthropicclient = Anthropic(api_key=apikey) if apikey else None      # create client only if a key is available
     if anthropicclient:
         logger.info("Anthropic client initialized")                     # log success
@@ -203,10 +209,13 @@ class MorseCodeChatbot:
 
         def timer(generation):
             time.sleep(MESSAGETIMEOUTS)           # wait for the configured silence period
+            should_fire = False
             with self.timeoutlock:
                 if generation == self.timeoutgeneration:  # only fire if we are still the newest timer
                     logger.info("Message timeout – treating accumulated words as full message")
-                    self.onmessageend()           # send the accumulated words to Claude
+                    should_fire = True
+            if should_fire:
+                self.onmessageend()           # send the accumulated words to Claude
 
         t = threading.Thread(target=timer, args=(gen,), daemon=True,
                              name="MsgTimeoutThread")   # create a background daemon thread
@@ -339,6 +348,8 @@ class MorseCodeChatbot:
             self.inputhandler = BLECentralHandler(
                 devicename=BLEDEVICENAME,                        # the name the Arduino is advertising
                 scantimeout=BLESCANTIMEOUT,                      # how long to scan before giving up
+                reconnectdelay=BLERECONNECTDELAY,                # wait before retrying after disconnect/scan failure
+                writewithresponse=BLEWRITEWITHRESPONSE,          # stronger BLE write delivery guarantees
                 wordcallback=self.onblewordreceived,            # called each time a word arrives over BLE
             )
             logger.info("BLE central input handler created")        # log that setup is done
