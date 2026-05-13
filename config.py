@@ -41,6 +41,10 @@ BLERECONNECTDELAY = 2.0   # seconds between automatic reconnect attempts for mor
 # Write response chunks with BLE acknowledgement for stronger delivery reliability.
 BLEWRITEWITHRESPONSE = True   # True = request GATT write response/ack from peripheral; False = fire-and-forget writes
 
+# Greeting text sent to the Arduino LCD immediately after BLE connects.
+# Set to "" to disable the greeting.
+BLEGREETING = "Hello Chib Mereh"   # text displayed on the Arduino LCD when the BLE connection is established
+
 # How long (seconds) to wait for new words before treating accumulated words
 # as a complete message and sending them to the AI.  The user can also
 # trigger a send immediately by pressing the SEND button on the Arduino, which
@@ -61,7 +65,6 @@ MAXWORDLENGTH = 20    # words longer than this many letters are rejected as inva
 ANTHROPICAPIKEY = ""     # leave blank and set the ANTHROPICAPIKEY environment variable
 ANTHROPICMODEL = "claude-3-5-haiku-latest"   # Claude model to use
 ANTHROPICMAXTOKENS = 240                     # maximum length of the AI's reply in tokens
-ANTHROPICTEMPERATURE = 0.7                    # how creative the AI reply is: 0.0 = very predictable, 1.0 = very random
 
 # ── Scenario Prompt ──────────────────────────────────────────────────────────
 # This is the Claude system message.  Change it to set the game scenario.

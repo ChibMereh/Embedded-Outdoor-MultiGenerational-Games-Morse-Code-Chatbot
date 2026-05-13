@@ -16,7 +16,6 @@ from config import (    # import all settings from config.py
     ANTHROPICAPIKEY,       # the Anthropic API key (can also be set as an environment variable)
     ANTHROPICMODEL,         # which Claude model to use
     ANTHROPICMAXTOKENS,    # maximum number of tokens in the AI's reply
-    ANTHROPICTEMPERATURE,   # how creative the AI's reply is (0.0 = predictable, 1.0 = creative)
     ENABLEBTRESPONSE,      # whether to send the AI reply back to the Arduino
     BTRESPONSEENCODING,    # how to encode the reply: "TEXT" or "MORSE"
     AUTORESPONSE,           # whether to automatically send the AI reply after each message
@@ -27,6 +26,7 @@ from config import (    # import all settings from config.py
     BLEWRITEWITHRESPONSE,  # whether BLE response writes should request acknowledgement
     MESSAGETIMEOUTS,       # seconds of silence before treating accumulated words as a full message
     SCENARIOPROMPT,         # the system prompt that gives the AI its personality / game role
+    BLEGREETING,            # text sent to the Arduino LCD when BLE connects (e.g. "Hello Chib Mereh")
 )
 from morsedecoder import MorseDecoder          # class that converts dots/dashes to letters and words
 from inputhandler import MorseInputProcessor, createinputhandler, BluetoothInputHandler  # input classes
@@ -198,11 +198,17 @@ class MorseCodeChatbot:
             self.decodedwords.append(word)         # add this word to the accumulated message
             self.lastwordtime = time.time()       # record when the last word arrived
 
-        # (Re-)start the inactivity timeout so messageend fires after MESSAGETIMEOUTS of silence
-        self.restarttimeout()
+        # Each SEND button press means the user wants to send to Claude now
+        self.onmessageend()
 
     def restarttimeout(self):
-        """Start (or reset) the message-end inactivity timer."""
+        """
+        Start (or reset) the message-end inactivity timer.
+
+        Not used in the default BLE flow (where each SEND press triggers
+        onmessageend immediately), but retained for multi-word accumulation
+        scenarios where callers want to batch words over a silence window.
+        """
         # Cancel previous timer by bumping a generation counter so old timers know they are stale
         self.timeoutgeneration = getattr(self, "timeoutgeneration", 0) + 1  # increment the generation counter
         gen = self.timeoutgeneration   # capture the current generation for the new timer thread
@@ -274,7 +280,6 @@ class MorseCodeChatbot:
                     {"role": "user",   "content": message},           # the decoded Morse message is the user turn
                 ],
                 max_tokens=ANTHROPICMAXTOKENS,            # cap the length of the reply
-                temperature=ANTHROPICTEMPERATURE,          # control randomness of the reply
             )
             textparts = [
                 block.text for block in messageresponse.content
@@ -351,6 +356,7 @@ class MorseCodeChatbot:
                 reconnectdelay=BLERECONNECTDELAY,                # wait before retrying after disconnect/scan failure
                 writewithresponse=BLEWRITEWITHRESPONSE,          # stronger BLE write delivery guarantees
                 wordcallback=self.onblewordreceived,            # called each time a word arrives over BLE
+                greetingtext=BLEGREETING,                       # sent to the Arduino LCD on connection
             )
             logger.info("BLE central input handler created")        # log that setup is done
             return
