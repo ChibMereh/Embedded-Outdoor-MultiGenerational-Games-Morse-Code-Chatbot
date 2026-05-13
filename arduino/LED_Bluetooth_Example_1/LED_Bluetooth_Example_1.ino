@@ -633,8 +633,8 @@ void loop() {
         strncmp(aiResponse, greetingPrefix, (size_t)greetingPrefixLen) == 0) {
       int greetingLen = aiResponseLen - greetingPrefixLen;
       memmove(aiResponse, aiResponse + greetingPrefixLen, (size_t)greetingLen);
-      aiResponse[greetingLen] = '\0';
       aiResponseLen = greetingLen;
+      aiResponse[aiResponseLen] = '\0';
     } else {
       playMorse(aiResponse, true);                                 // Play reply as buzzer-only Morse first
     }
