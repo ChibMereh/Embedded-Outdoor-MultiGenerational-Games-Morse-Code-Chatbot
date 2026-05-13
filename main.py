@@ -4,6 +4,7 @@ Arduino Nano BLE communication with Anthropic Claude integration
 """
 
 import os           # provides os.environ for reading environment variables
+import re           # provides whitespace normalization for LCD-safe AI responses
 import sys          # provides stdout/stderr so we can make console output encoding-safe
 import time         # provides time.time() for timestamps and time.sleep() for waiting
 import logging      # provides the logging framework for recording diagnostic messages
@@ -74,6 +75,8 @@ except ImportError:
 
 # Sentinel word transmitted by the Arduino when the user presses SEND with nothing typed
 SENDSENTINEL = "SEND"
+MAXLCDRESPONSECHARS = 72
+MAXBLERESPONSEBYTES = 160
 
 
 class MorseCodeChatbot:
@@ -289,6 +292,11 @@ class MorseCodeChatbot:
             if not airesponse:
                 logger.warning("Anthropic response did not contain text content")
                 return None
+
+            airesponse = self.formatresponseforlcd(airesponse)
+            if not airesponse:
+                logger.warning("Anthropic response became empty after LCD formatting")
+                return None
             
             if ENABLEDISPLAY:
                 print(f"AI Response: {airesponse}\n")          # show the reply on the console
@@ -301,6 +309,30 @@ class MorseCodeChatbot:
             if ENABLEDISPLAY:
                 print(f"Claude error: {e}\n")                   # show the error on the console
             return None                                          # return None to signal failure
+
+    def formatresponseforlcd(self, responsetext):
+        """Normalize and shorten AI text so it fits the BLE/LCD display path reliably."""
+        compact = re.sub(r"\s+", " ", responsetext).strip()
+        if not compact:
+            return ""
+
+        firstsentence = re.split(r"(?<=[.!?])\s+", compact, maxsplit=1)[0].strip()
+        if firstsentence:
+            compact = firstsentence
+
+        if len(compact) > MAXLCDRESPONSECHARS:
+            truncated = compact[:MAXLCDRESPONSECHARS].rstrip()
+            if " " in truncated:
+                truncated = truncated.rsplit(" ", 1)[0]
+            compact = truncated.rstrip(" ,;:-") + "..."
+
+        encoded = compact.encode("utf-8", errors="replace")
+        while len(encoded) > MAXBLERESPONSEBYTES and compact:
+            compact = compact[:-1].rstrip()
+            if compact.endswith(".."):
+                compact = compact[:-2].rstrip() + "..."
+            encoded = compact.encode("utf-8", errors="replace")
+        return compact
     
     # ── Response delivery ────────────────────────────────────────────────
 

@@ -79,6 +79,10 @@ const int maxPattern        = 8;    // Longest Morse pattern is 7 symbols
 const int maxWord           = 50;   // Maximum number of letters in a word
 const int lcdCols           = 14;   // LCD screen has 14 columns
 const int lcdRows           = 2;    // LCD screen has 2 rows
+const char inLabel[]        = "IN:";
+const char outLabel[]       = "OUT:";
+const int inContentCols     = lcdCols - (sizeof(inLabel) - 1);
+const int outContentCols    = lcdCols - (sizeof(outLabel) - 1);
 const int maxResponseBytes = 160;  // Maximum length of AI reply (must match ble_handler.py)
 const char greetingPrefix[] = "__GREETING__:"; // Prefix for display-only connection greeting from Pi
 const int greetingPrefixLen = sizeof(greetingPrefix) - 1; // Compile-time greeting prefix length
@@ -170,11 +174,11 @@ void lcdPrintLabeled(int row, const char *label, const char *content) {
 }
 
 void lcdPrintIn(const char *content) {
-  lcdPrintLabeled(0, "IN:", content);
+  lcdPrintLabeled(0, inLabel, content);
 }
 
 void lcdPrintOut(const char *content) {
-  lcdPrintLabeled(1, "OUT:", content);
+  lcdPrintLabeled(1, outLabel, content);
 }
 
 unsigned long readDotDurationMs() {
@@ -394,14 +398,13 @@ void sendWord() {
 
 // Update the LCD screen to show the current state
 void updateLCD() {
-  lcd.clear();                                                      // Clear the whole screen
   if (showingAiResponse && aiResponseLen > 0) {                     // If an AI reply should be shown
-    if (aiResponseLen <= lcdCols) {                                // Reply fits on one screen
+    if (aiResponseLen <= inContentCols) {                          // Reply fits on the visible IN area
       lcdPrintIn(aiResponse);                                       // Show the whole reply on IN row
     } else {                                                        // Reply is long - show current scroll position
-      char slice[lcdCols + 1];                                     // Temporary buffer for the visible part
-      strncpy(slice, aiResponse + aiScrollOffset, lcdCols);        // Copy the visible section
-      slice[lcdCols] = '\0';                                       
+      char slice[inContentCols + 1];                               // Temporary buffer for the visible part
+      strncpy(slice, aiResponse + aiScrollOffset, inContentCols);  // Copy the visible section
+      slice[inContentCols] = '\0';                                 
       lcdPrintIn(slice);                                            // Show the slice on the IN row
     }
   } else if (aiResponsePendingReveal) {
@@ -415,12 +418,12 @@ void updateLCD() {
   if (morseLen > 0) {                                               // If the user is entering dots/dashes
     lcdPrintOut(morsePattern);                                      // Show the pattern on OUT row
   } else if (wordLen > 0) {                                         // If there's a word being built
-    if (wordLen <= lcdCols) {                                      // Word fits on screen all at once
+    if (wordLen <= outContentCols) {                               // Word fits on the visible OUT area
       lcdPrintOut(wordBuffer);                                      // Show the whole word on OUT row
     } else {                                                        // Word is too long - show a scrolling slice
-      char slice[lcdCols + 1];                                     // Temporary buffer for the visible part
-      strncpy(slice, wordBuffer + scrollOffset, lcdCols);          // Copy the visible section
-      slice[lcdCols] = '\0';                                       // Add end-of-string marker
+      char slice[outContentCols + 1];                              // Temporary buffer for the visible part
+      strncpy(slice, wordBuffer + scrollOffset, outContentCols);   // Copy the visible section
+      slice[outContentCols] = '\0';                                // Add end-of-string marker
       lcdPrintOut(slice);                                           // Show the slice on the OUT row
     }
   } else if (bleConnected) {                                        // Connected but nothing typed yet
@@ -596,23 +599,23 @@ void loop() {
   }
 
   // Scroll long outgoing words on the bottom row of the LCD
-  if (wordLen > lcdCols && millis() - lastScrollTime >= lcdScrollMs) {
+  if (wordLen > outContentCols && millis() - lastScrollTime >= lcdScrollMs) {
     lastScrollTime = millis();                          // Record the scroll time
-    if (++scrollOffset > wordLen - lcdCols) scrollOffset = 0;  // Advance scroll
-    char slice[lcdCols + 1];                           // Temporary buffer for the visible portion
-    strncpy(slice, wordBuffer + scrollOffset, lcdCols); // Copy the visible section of the word
-    slice[lcdCols] = '\0';                             // Add end-of-string marker
+    if (++scrollOffset > wordLen - outContentCols) scrollOffset = 0;  // Advance scroll
+    char slice[outContentCols + 1];                   // Temporary buffer for the visible portion
+    strncpy(slice, wordBuffer + scrollOffset, outContentCols); // Copy the visible section of the word
+    slice[outContentCols] = '\0';                     // Add end-of-string marker
     lcdPrintOut(slice);                                  // Show the scrolled portion on the OUT row
   }
 
   // Scroll the AI reply on the top row of the LCD
-  if (showingAiResponse && aiResponseLen > lcdCols &&
+  if (showingAiResponse && aiResponseLen > inContentCols &&
       millis() - lastAiScrollTime >= lcdScrollMs) {
     lastAiScrollTime = millis();                        
-    if (++aiScrollOffset > aiResponseLen - lcdCols) aiScrollOffset = 0;  
-    char slice[lcdCols + 1];                           
-    strncpy(slice, aiResponse + aiScrollOffset, lcdCols);  
-    slice[lcdCols] = '\0';                             
+    if (++aiScrollOffset > aiResponseLen - inContentCols) aiScrollOffset = 0;  
+    char slice[inContentCols + 1];                     
+    strncpy(slice, aiResponse + aiScrollOffset, inContentCols);  
+    slice[inContentCols] = '\0';                       
     lcdPrintIn(slice);                                   
   }
 
