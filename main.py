@@ -202,7 +202,13 @@ class MorseCodeChatbot:
         self.onmessageend()
 
     def restarttimeout(self):
-        """Start (or reset) the message-end inactivity timer."""
+        """
+        Start (or reset) the message-end inactivity timer.
+
+        Not used in the default BLE flow (where each SEND press triggers
+        onmessageend immediately), but retained for multi-word accumulation
+        scenarios where callers want to batch words over a silence window.
+        """
         # Cancel previous timer by bumping a generation counter so old timers know they are stale
         self.timeoutgeneration = getattr(self, "timeoutgeneration", 0) + 1  # increment the generation counter
         gen = self.timeoutgeneration   # capture the current generation for the new timer thread
