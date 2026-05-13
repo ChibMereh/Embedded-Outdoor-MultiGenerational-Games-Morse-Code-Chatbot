@@ -210,7 +210,7 @@ void bleFriendlyDelay(unsigned long durationMs) {
   unsigned long start = millis();
   while (millis() - start < durationMs) {
     BLE.poll();
-    delay(2);
+    delay(1);
   }
 }
 
