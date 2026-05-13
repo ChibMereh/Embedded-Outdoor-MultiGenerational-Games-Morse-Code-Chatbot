@@ -63,7 +63,7 @@ MAXWORDLENGTH = 20    # words longer than this many letters are rejected as inva
 
 # Anthropic Claude Configuration
 ANTHROPICAPIKEY = ""     # leave blank and set the ANTHROPICAPIKEY environment variable
-ANTHROPICMODEL = "claude-3-5-haiku-latest"   # Claude model to use
+ANTHROPICMODEL = "claude-opus-4-7"   # Claude model to use
 ANTHROPICMAXTOKENS = 240                     # maximum length of the AI's reply in tokens
 
 # ── Scenario Prompt ──────────────────────────────────────────────────────────
