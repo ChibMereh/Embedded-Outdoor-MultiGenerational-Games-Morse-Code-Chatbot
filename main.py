@@ -77,6 +77,8 @@ except ImportError:
 SENDSENTINEL = "SEND"
 MAXLCDRESPONSECHARS = 72
 MAXBLERESPONSEBYTES = 160
+ELLIPSIS = "..."
+ELLIPSIS_BYTES = 3
 
 
 class MorseCodeChatbot:
@@ -325,18 +327,20 @@ class MorseCodeChatbot:
         if len(compact) > MAXLCDRESPONSECHARS:
             truncated = compact[:MAXLCDRESPONSECHARS].rstrip()
             if " " in truncated:
-                truncated = truncated.rsplit(" ", 1)[0] or compact[:MAXLCDRESPONSECHARS].rstrip()
-            compact = truncated.rstrip(" ,;:-") + "..."
+                wordtrimmed = truncated.rsplit(" ", 1)[0].rstrip()
+                if wordtrimmed:
+                    truncated = wordtrimmed
+            compact = truncated.rstrip(" ,;:-") + ELLIPSIS
 
         encoded = compact.encode("utf-8", errors="replace")
         if len(encoded) > MAXBLERESPONSEBYTES:
             compact = (
-                encoded[: MAXBLERESPONSEBYTES - 3]
+                encoded[: MAXBLERESPONSEBYTES - ELLIPSIS_BYTES]
                 .decode("utf-8", errors="ignore")
                 .rstrip(" ,;:-.")
             )
             if compact:
-                compact += "..."
+                compact += ELLIPSIS
         return compact
     
     # ── Response delivery ────────────────────────────────────────────────
