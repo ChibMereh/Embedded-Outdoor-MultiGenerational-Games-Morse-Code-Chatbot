@@ -86,6 +86,12 @@ The sketch drives the LCD directly in **4-bit parallel mode** using the built-in
 > **Blank screen?** The most common cause is the contrast (V0) pin.  
 > Turn the potentiometer slowly — characters should become visible somewhere in the middle of its range.  
 > If you don't have a pot, a 10 kΩ resistor between V0 and GND usually gives enough contrast.
+>
+> **Dull/faint characters?** On this parallel LCD wiring, brightness and contrast are mostly hardware-limited.  
+> Software can improve readability (for example slower scrolling and cleaner text updates), but true brightness comes from:
+> - Correct V0 contrast adjustment
+> - Adequate backlight current wiring on A/K pins
+> - A proper backlight resistor value
 
 The sketch is written for a **2-row × 14-column** display.  
 If you use a standard 16-column module, change `const int LCD_COLS = 14;` to `16`.

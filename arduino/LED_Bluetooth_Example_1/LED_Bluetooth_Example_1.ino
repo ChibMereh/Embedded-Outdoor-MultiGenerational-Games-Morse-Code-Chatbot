@@ -33,6 +33,7 @@
 // Include the libraries we need
 #include <ArduinoBLE.h>          // For Bluetooth Low Energy communication
 #include <LiquidCrystal.h>       // For the parallel HD44780 LCD screen
+#include <ctype.h>               // For toupper() so LCD text is easier to read
 
 // --- Pin numbers ---
 // These tell the Arduino which pin each input and LED are on
@@ -58,7 +59,7 @@ const int pinLcdD7 = A5;  // LCD data pin 7
 const unsigned long debounceMs     = 50;   // Wait 50ms for button to stop bouncing
 const unsigned long charTimeoutMs = 800;  // Wait 800ms of silence before decoding a letter
 const unsigned long ledFlashMs    = 200;  // LED stays on for 200ms when it flashes
-const unsigned long lcdScrollMs   = 400;  // How often the LCD scrolls long text (every 400ms)
+const unsigned long lcdScrollMs   = 650;  // Slower scroll improves readability on small LCDs
 // Dot/dash are selected by dedicated paddles 
 const unsigned int  morseBeepHz    = 700;  
 const unsigned int  dotToneHz      = 1200; // Higher pitch 
@@ -167,7 +168,7 @@ void lcdPrintLabeled(int row, const char *label, const char *content) {
   int start = labelLen;
   if (content && content[0] != '\0') {
     for (int i = 0; i < lcdCols - start && content[i] != '\0'; i++) {
-      line[start + i] = content[i];
+      line[start + i] = (char)toupper((unsigned char)content[i]);
     }
   }
   lcdPrint(row, line);
