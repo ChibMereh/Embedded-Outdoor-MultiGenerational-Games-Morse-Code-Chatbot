@@ -635,8 +635,6 @@ void loop() {
       memmove(aiResponse, aiResponse + greetingPrefixLen, (size_t)greetingLen + 1);
       aiResponse[greetingLen] = '\0';
       aiResponseLen = greetingLen;
-      showingAiResponse = true;
-      aiResponsePendingReveal = false;
     } else {
       playMorse(aiResponse, true);                                 // Play reply as buzzer-only Morse first
     }
