@@ -32,6 +32,7 @@ RESPCHARUUID = "12345678-1234-5678-1234-56789abcdef5"  # UUID of the characteris
 
 # Maximum bytes that fit in one BLE write to responseChar (matches Arduino)
 MAXRESPONSEBYTES = 160    # each BLE write can carry at most 160 bytes (must match the Arduino sketch constant)
+GREETINGPREFIX = "__GREETING__:"   # prefix marking display-only greeting payloads for Arduino
 
 
 class BLECentralHandler:
@@ -214,7 +215,8 @@ class BLECentralHandler:
                     # Send greeting text to the Arduino LCD if one is configured
                     if self.greetingtext:
                         try:
-                            encoded = self.greetingtext.encode("utf-8", errors="replace")
+                            greetingpayload = f"{GREETINGPREFIX}{self.greetingtext}"
+                            encoded = greetingpayload.encode("utf-8", errors="replace")
                             await client.write_gatt_char(
                                 RESPCHARUUID,
                                 encoded[:MAXRESPONSEBYTES],

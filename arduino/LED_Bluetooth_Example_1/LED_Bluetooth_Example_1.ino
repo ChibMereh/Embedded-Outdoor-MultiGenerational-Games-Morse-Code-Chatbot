@@ -80,6 +80,8 @@ const int maxWord           = 50;   // Maximum number of letters in a word
 const int lcdCols           = 14;   // LCD screen has 14 columns
 const int lcdRows           = 2;    // LCD screen has 2 rows
 const int maxResponseBytes = 160;  // Maximum length of AI reply (must match ble_handler.py)
+const char greetingPrefix[] = "__GREETING__:"; // Prefix for display-only connection greeting from Pi
+const int greetingPrefixLen = sizeof(greetingPrefix) - 1; // Compile-time greeting prefix length
 
 // --- Morse code table ---
 // Each entry stores one letter and its Morse code pattern
@@ -336,7 +338,6 @@ void finalizeCharacter() {
     if (wordLen < maxWord) {                                       // If the word isn't too long yet
       wordBuffer[wordLen++] = ch;                                   // Add the letter to the word
       wordBuffer[wordLen]   = '\0';                                 // Add the end-of-string marker
-      wordChar.writeValue((uint8_t *)wordBuffer, (unsigned int)wordLen);  // Send updated word over BLE
     }
     playLetterFeedback();                                            // Play distinct decoded-letter feedback
   } else {                                                          // Pattern not recognised
@@ -628,7 +629,14 @@ void loop() {
     aiResponsePendingReveal = false;                               // No manual reveal required
     Serial.print(F("AI response received: ")); Serial.println(aiResponse);  // Print to Serial Monitor
     playYellowFeedback();                                          // Play YELLOW feedback to show reply arrived
-    playMorse(aiResponse, true);                                   // Play reply as buzzer-only Morse first
+    if (aiResponseLen >= greetingPrefixLen &&
+        strncmp(aiResponse, greetingPrefix, (size_t)greetingPrefixLen) == 0) {
+      int greetingLen = aiResponseLen - greetingPrefixLen;
+      memmove(aiResponse, aiResponse + greetingPrefixLen, (size_t)greetingLen + 1);
+      aiResponseLen = greetingLen;
+    } else {
+      playMorse(aiResponse, true);                                 // Play reply as buzzer-only Morse first
+    }
     updateLCD();                                                   // Show the AI text on IN row
   }
 }
