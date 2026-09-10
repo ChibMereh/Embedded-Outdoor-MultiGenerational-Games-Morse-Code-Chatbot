@@ -181,9 +181,5 @@ The Pi will scan for the Arduino, connect automatically, and wait for words.
 │       └── LED_Bluetooth_Example_1.ino   # Arduino sketch
 ├── ble_handler.py      # BLE central (bleak) — scan, connect, notify, write
 ├── config.py           # All tunable settings including SCENARIO_PROMPT
-├── input_handler.py    # GPIO / serial / classic-BT handlers (legacy modes)
-├── main.py             # Application entry point & chatbot logic
-├── morse_decoder.py    # Morse ↔ text codec
-├── requirements.txt    # Python dependencies
-└── word_validator.py   # Dictionary-based word validation
+└── main.py             # Application entry point & chatbot logic
 ```
