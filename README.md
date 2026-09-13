@@ -12,8 +12,8 @@ small LCD screen.
 ┌─────────────────────────────────┐        BLE GATT        ┌────────────────────┐
 │   Arduino Nano 33 BLE           │ ◄─────────────────────► │  Raspberry Pi 4    │
 │                                 │                          │                    │
-│  Keyer + ERASE/SEND buttons     │  wordChar (Notify) ───► │  ble_handler.py    │
-│  LCD 14×2 displays:             │                          │  morse_decoder.py  │
+│  Keyer + ERASE/SEND buttons     │  wordChar (Notify) ───► │  blehandler.py     │
+│  LCD 14×2 displays:             │                          │  config.py         │
 │    • top: received AI text      │ ◄─── responseChar (Write)│  Anthropic Claude  │
 │    • bottom: outgoing input     │                          │  main.py           │
 │    • decode-first reveal flow   │                          └────────────────────┘
@@ -27,13 +27,11 @@ small LCD screen.
    outgoing word buffer shown on the bottom LCD row.
 3. User presses **Send** → the word is transmitted to the Pi via a BLE
    notification on `wordChar` (UUID `…def3`).
-4. The Pi accumulates words.  After `MESSAGE_TIMEOUT_S` seconds of silence
-   (default 8 s) the accumulated words are assembled into a full message.
-5. The full message is sent to the Anthropic Claude API using the configurable
+4. The Pi sends each received word directly to the Anthropic Claude API using the configurable
    `SCENARIO_PROMPT` as the system message.
-6. The AI response is written back to the Arduino via `responseChar`
+5. The AI response is written back to the Arduino via `responseChar`
    (UUID `…def5`).
-7. The Arduino plays the response as buzzer-only Morse first (high tone = dot,
+6. The Arduino plays the response as buzzer-only Morse first (high tone = dot,
    low tone = dash), then automatically shows the response on the top LCD row.
 
 ---
@@ -43,13 +41,15 @@ small LCD screen.
 | Component | Notes |
 |-----------|-------|
 | Arduino Nano 33 BLE | Runs the **Morse Encoder Final** sketch in `arduino/Morse_Encoder_Final/MorseCodeEncoderFinal.ino` |
-| I²C LCD 14×2 (address `0x27`) | SDA → Nano SDA, SCL → Nano SCL |
+| LCD 14×2 (HD44780, 4-bit parallel) | RS=A0, EN=A1, D4=A2, D5=A3, D6=A4, D7=A5 |
 | Morse keyer input | Pin 2 (DIT)=dot, Pin 3 (DAH)=dash, INPUT_PULLUP |
 | ERASE button | Pin 4 → GND, INPUT_PULLUP |
 | SEND button | Pin 5 → GND, INPUT_PULLUP |
-| RGB LED | R=6, G=7, B=8 (220 Ω to GND each) |
-| Piezo buzzer | Signal=9, other leg to GND |
+| LEDs | Green=6, Red=9, Yellow=10 (220 Ω to GND each) |
+| Piezo buzzer | Signal=12, other leg to GND |
 | Raspberry Pi 4 | Runs the Python code in the repo root |
+
+For complete Arduino wiring and behavior details, see `arduino/README.md`.
 
 ---
 
@@ -73,7 +73,7 @@ sudo systemctl start bluetooth
 ### 2. Install Python dependencies
 
 ```bash
-pip install -r requirements.txt
+pip install "bleak>=0.21" "anthropic>=0.40.0"
 ```
 
 This installs:
@@ -82,7 +82,6 @@ This installs:
 |---------|---------|
 | `bleak>=0.21` | BLE GATT central (replaces classic Bluetooth serial) |
 | `anthropic>=0.40.0` | Anthropic Python client |
-| `pyserial>=3.5` | Kept for legacy GPIO/serial modes |
 
 ### 3. Set your Anthropic API key
 
@@ -106,8 +105,8 @@ Open `config.py` and edit `SCENARIO_PROMPT`:
 # Default — general assistant
 SCENARIO_PROMPT = (
     "You are a helpful assistant communicating via Morse code. "
-    "Keep your responses concise and clear (2 sentences maximum), "
-    "as they will be displayed on a small LCD screen attached to an Arduino."
+    "Reply with one short, clear sentence. Keep it brief — "
+    "your reply will scroll across a small 14-column LCD screen."
 )
 
 # SOS rescue scenario
@@ -133,12 +132,15 @@ SCENARIO_PROMPT = (
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `USE_BLE` | `True` | Use BLE (Nano 33 BLE) vs classic Bluetooth serial |
 | `BLE_DEVICE_NAME` | `"MorseEncoder"` | Must match `BLE.setLocalName()` in the sketch |
 | `BLE_SCAN_TIMEOUT` | `30.0` | Seconds to scan before giving up |
-| `MESSAGE_TIMEOUT_S` | `8.0` | Seconds of silence before message is sent to Claude |
-| `ANTHROPIC_MODEL` | `"claude-3-5-haiku-latest"` | Claude model to use |
-| `ANTHROPIC_MAX_TOKENS` | `240` | Keep short so response fits on the LCD |
+| `BLE_RECONNECT_DELAY` | `2.0` | Seconds between reconnect attempts |
+| `BLE_WRITE_RESPONSE` | `True` | Request GATT write acknowledgement |
+| `BLE_GREETING` | `"Hello Chib Mereh"` | Greeting shown on the Arduino LCD after connect |
+| `ANTHROPIC_MODEL` | `"claude-opus-4-5"` | Claude model to use |
+| `ANTHROPIC_MAX_TOKENS` | `80` | Keep short so response fits on the LCD |
+| `ENABLE_LOGGING` | `True` | Enable file + console logging |
+| `LOG_FILE` | `"morse_chatbot.log"` | Log filename |
 
 > **LCD character limit:** The LCD is 14 columns wide.  The Arduino scrolls
 > responses that are longer than 14 characters, but try to keep the AI
@@ -179,7 +181,7 @@ The Pi will scan for the Arduino, connect automatically, and wait for words.
 ├── arduino/
 │   └── Morse_Encoder_Final/
 │       └── MorseCodeEncoderFinal.ino   # Morse Encoder Final Arduino sketch
-├── ble_handler.py      # BLE central (bleak) — scan, connect, notify, write
+├── blehandler.py       # BLE central (bleak) — scan, connect, notify, write
 ├── config.py           # All tunable settings including SCENARIO_PROMPT
 └── main.py             # Application entry point & chatbot logic
 ```
