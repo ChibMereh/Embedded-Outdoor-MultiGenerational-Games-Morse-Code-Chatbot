@@ -1,11 +1,11 @@
 # Morse code documentation
 
-## Arduino Nano 33 BLE encoder sketch
+## Arduino Nano 33 BLE Morse Encoder Final sketch
 
 The complete Arduino encoder sketch is located at:
 
 ```
-arduino/LED_Bluetooth_Example_1/LED_Bluetooth_Example_1.ino
+arduino/Morse_Encoder_Final/MorseCodeEncoderFinal.ino
 ```
 
 See [`arduino/README.md`](arduino/README.md) for:

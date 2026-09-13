@@ -1,12 +1,12 @@
-# Arduino Morse Code Encoder
+# Arduino Morse Encoder Final
 
-This folder contains the Arduino sketch for the **Morse Code Encoder** component of the *Embedded Outdoor Multi-Generational Games – Morse Code Chatbot* project.
+This folder contains the Arduino sketch for the **Morse Encoder Final** component of the *Embedded Outdoor Multi-Generational Games – Morse Code Chatbot* project.
 
 ## File
 
 | File | Description |
 |------|-------------|
-| `LED_Bluetooth_Example_1/LED_Bluetooth_Example_1.ino` | Complete Arduino sketch |
+| `Morse_Encoder_Final/MorseCodeEncoderFinal.ino` | Complete Arduino sketch |
 
 ---
 
