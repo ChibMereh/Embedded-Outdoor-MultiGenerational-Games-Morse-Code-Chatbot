@@ -42,7 +42,7 @@ small LCD screen.
 
 | Component | Notes |
 |-----------|-------|
-| Arduino Nano 33 BLE | Runs the sketch in `arduino/Morse_Encoder_Final/` |
+| Arduino Nano 33 BLE | Runs the **Morse Encoder Final** sketch in `arduino/Morse_Encoder_Final/MorseCodeEncoderFinal.ino` |
 | I²C LCD 14×2 (address `0x27`) | SDA → Nano SDA, SCL → Nano SCL |
 | Morse keyer input | Pin 2 (DIT)=dot, Pin 3 (DAH)=dash, INPUT_PULLUP |
 | ERASE button | Pin 4 → GND, INPUT_PULLUP |
@@ -178,7 +178,7 @@ The Pi will scan for the Arduino, connect automatically, and wait for words.
 .
 ├── arduino/
 │   └── Morse_Encoder_Final/
-│       └── MorseCodeEncoderFinal.ino   # Arduino sketch
+│       └── MorseCodeEncoderFinal.ino   # Morse Encoder Final Arduino sketch
 ├── ble_handler.py      # BLE central (bleak) — scan, connect, notify, write
 ├── config.py           # All tunable settings including SCENARIO_PROMPT
 └── main.py             # Application entry point & chatbot logic

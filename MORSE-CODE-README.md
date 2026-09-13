@@ -1,6 +1,6 @@
 # Morse code documentation
 
-## Arduino Nano 33 BLE encoder sketch
+## Arduino Nano 33 BLE Morse Encoder Final sketch
 
 The complete Arduino encoder sketch is located at:
 
