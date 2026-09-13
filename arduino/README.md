@@ -6,7 +6,7 @@ This folder contains the Arduino sketch for the **Morse Code Encoder** component
 
 | File | Description |
 |------|-------------|
-| `LED_Bluetooth_Example_1/LED_Bluetooth_Example_1.ino` | Complete Arduino sketch |
+| `Morse_Encoder_Final/MorseCodeEncoderFinal.ino` | Complete Arduino sketch |
 
 ---
 
